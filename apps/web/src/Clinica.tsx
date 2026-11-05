@@ -109,7 +109,9 @@ export function Clinica({ sesion, onSalir }: { sesion: Sesion; onSalir: () => vo
     } catch (fallo) {
       setError(mensaje(fallo));
       if (fallo instanceof ErrorApi && fallo.codigo === 'ConflictoDeConcurrencia' && actual) {
-        void abrir(actual.pacienteId, seccion);
+        // Recarga la versión más reciente y deja el aviso visible para que el médico sepa por qué.
+        const aviso = fallo.message;
+        void abrir(actual.pacienteId, seccion).then(() => setError(aviso));
       }
       return false;
     } finally {

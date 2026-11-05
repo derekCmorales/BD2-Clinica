@@ -15,7 +15,9 @@
     "verificar:entrega-1": "bash scripts/verificar-entrega-1.sh",
     "verificar:arquitectura": "bash scripts/verificar-arquitectura.sh",
     "test": "pnpm --filter @historiales/api test",
-    "test:contrato": "bash scripts/test-contrato.sh"
+    "test:contrato": "bash scripts/test-contrato.sh",
+    "e2e:rapido": "bash scripts/e2e-rapido.sh",
+    "e2e:motores": "bash scripts/e2e-motores.sh"
   },
   "engines": {
     "node": ">=20"
