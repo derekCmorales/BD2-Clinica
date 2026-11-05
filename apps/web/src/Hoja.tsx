@@ -1,19 +1,61 @@
-import { FormEvent, useId, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import type { ExpedienteVista } from './api';
-import { fechaHora, fechaLegible, parsearFecha, vencida } from './formato';
+import { fechaHora, fechaLegible, fechaRelativa, hoyHora, hoyIso, parsearFecha, vencida } from './formato';
+import { Grafica } from './Grafica';
+import {
+  Alerta,
+  Boton,
+  Campo,
+  Dialogo,
+  EtiquetaClasificacion,
+  Icono,
+  Insignia,
+  Vacio,
+  type NombreIcono,
+  type Tono,
+} from './ui';
 
 export type Seccion = 'resumen' | 'consultas' | 'agenda' | 'laboratorio' | 'crecimiento' | 'vacunas' | 'odontograma';
 
-const CAMPOS: Record<string, [string, string]> = {
-  hematologia: ['hemoglobina', 'leucocitos'],
-  orina: ['color', 'ph'],
-  cultivo: ['organismo', 'sensibleA'],
-  otro: ['descripcion', 'nota'],
+type Enviar = (ruta: string, cuerpo: unknown, exito?: string) => Promise<boolean>;
+
+interface AccionProps {
+  expediente: ExpedienteVista;
+  base: string;
+  cerrado: boolean;
+  ocupado: boolean;
+  onEnviar: Enviar;
+}
+
+/** Campos mínimos por tipo de examen: espejo de CAMPOS_POR_TIPO_EXAMEN del dominio. */
+const TIPOS_EXAMEN: Record<string, { etiqueta: string; campos: Array<{ clave: string; etiqueta: string; pista?: string }> }> = {
+  hematologia: {
+    etiqueta: 'Hematología',
+    campos: [
+      { clave: 'hemoglobina', etiqueta: 'Hemoglobina', pista: 'g/dL' },
+      { clave: 'leucocitos', etiqueta: 'Leucocitos', pista: '×10³/µL' },
+    ],
+  },
+  orina: {
+    etiqueta: 'Orina',
+    campos: [
+      { clave: 'color', etiqueta: 'Color' },
+      { clave: 'ph', etiqueta: 'pH' },
+    ],
+  },
+  cultivo: {
+    etiqueta: 'Cultivo',
+    campos: [
+      { clave: 'organismo', etiqueta: 'Organismo aislado' },
+      { clave: 'sensibleA', etiqueta: 'Sensible a' },
+    ],
+  },
+  otro: { etiqueta: 'Otro', campos: [{ clave: 'descripcion', etiqueta: 'Descripción' }] },
 };
 
 const ESTADOS_PIEZA = ['sano', 'caries', 'obturado', 'corona', 'ausente', 'implante', 'endodoncia', 'otro'] as const;
 
-const CUADRANTES = [
+const ARCADAS = [
   [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28],
   [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38],
 ];
@@ -27,479 +69,1119 @@ export function Hoja({
   seccion: Seccion;
   expediente: ExpedienteVista;
   ocupado: boolean;
-  onEnviar: (ruta: string, cuerpo: unknown) => Promise<void>;
+  onEnviar: Enviar;
 }) {
-  const base = `/pacientes/${expediente.pacienteId}`;
-  const cerrado = expediente.estado === 'archivado';
-
-  if (seccion === 'resumen') {
-    return <Resumen expediente={expediente} />;
+  const props: AccionProps = {
+    expediente,
+    base: `/pacientes/${expediente.pacienteId}`,
+    cerrado: expediente.estado === 'archivado',
+    ocupado,
+    onEnviar,
+  };
+  switch (seccion) {
+    case 'resumen':
+      return <Resumen expediente={expediente} />;
+    case 'consultas':
+      return <Consultas {...props} />;
+    case 'agenda':
+      return <Agenda {...props} />;
+    case 'laboratorio':
+      return <Laboratorio {...props} />;
+    case 'crecimiento':
+      return <Crecimiento {...props} />;
+    case 'vacunas':
+      return <Vacunas {...props} />;
+    default:
+      return <Odontograma {...props} />;
   }
-  if (seccion === 'consultas') {
-    return <Consultas expediente={expediente} base={base} cerrado={cerrado} ocupado={ocupado} onEnviar={onEnviar} />;
-  }
-  if (seccion === 'agenda') {
-    return <Agenda expediente={expediente} base={base} cerrado={cerrado} ocupado={ocupado} onEnviar={onEnviar} />;
-  }
-  if (seccion === 'laboratorio') {
-    return <Laboratorio expediente={expediente} base={base} cerrado={cerrado} ocupado={ocupado} onEnviar={onEnviar} />;
-  }
-  if (seccion === 'crecimiento') {
-    return <Crecimiento expediente={expediente} base={base} cerrado={cerrado} ocupado={ocupado} onEnviar={onEnviar} />;
-  }
-  if (seccion === 'vacunas') {
-    return <Vacunas expediente={expediente} base={base} cerrado={cerrado} ocupado={ocupado} onEnviar={onEnviar} />;
-  }
-  return <Odontograma expediente={expediente} base={base} cerrado={cerrado} ocupado={ocupado} onEnviar={onEnviar} />;
 }
 
+/* ───────────── Piezas compartidas ───────────── */
+
+function Barra({
+  titulo,
+  descripcion,
+  clasificacion,
+  accion,
+}: {
+  titulo: string;
+  descripcion?: string;
+  clasificacion?: 'confidencial' | 'restringido';
+  accion?: ReactNode;
+}) {
+  return (
+    <div className="seccion__barra">
+      <div>
+        <h3>
+          {titulo} {clasificacion ? <EtiquetaClasificacion nivel={clasificacion} /> : null}
+        </h3>
+        {descripcion ? <p>{descripcion}</p> : null}
+      </div>
+      {accion}
+    </div>
+  );
+}
+
+function SoloLectura({ cerrado }: { cerrado: boolean }) {
+  return cerrado ? (
+    <Alerta tono="info" titulo="Expediente archivado">
+      Puedes consultar el historial, pero ya no admite registros nuevos.
+    </Alerta>
+  ) : null;
+}
+
+function BotonAgregar({ cerrado, onClick, children }: { cerrado: boolean; onClick: () => void; children: ReactNode }) {
+  if (cerrado) return null;
+  return (
+    <Boton variante="primary" icono="mas" onClick={onClick}>
+      {children}
+    </Boton>
+  );
+}
+
+function PieDialogo({ onCancelar, ocupado, texto }: { onCancelar: () => void; ocupado: boolean; texto: string }) {
+  return (
+    <>
+      <Boton variante="ghost" onClick={onCancelar}>
+        Cancelar
+      </Boton>
+      <Boton type="submit" variante="primary" cargando={ocupado}>
+        {texto}
+      </Boton>
+    </>
+  );
+}
+
+/* ───────────── Resumen ───────────── */
+
 function Resumen({ expediente }: { expediente: ExpedienteVista }) {
-  const eventos = [
-    ...expediente.consultas.map((consulta) => ({
-      cuando: consulta.ocurridaEn,
-      titulo: consulta.motivo,
-      detalle: 'Consulta',
-    })),
-    ...expediente.citas.map((cita) => ({
-      cuando: cita.inicio,
-      titulo: cita.motivo,
-      detalle: `Cita · ${cita.estado}`,
-    })),
-    ...expediente.examenes.map((examen) => ({
-      cuando: examen.fecha,
-      titulo: examen.tipoExamen,
-      detalle: 'Laboratorio',
-    })),
-    ...expediente.mediciones.map((medicion) => ({
-      cuando: medicion.fecha,
-      titulo: `${medicion.pesoKg} kg · ${medicion.tallaCm} cm`,
-      detalle: 'Medición',
-    })),
-    ...expediente.vacunas.map((vacuna) => ({
-      cuando: vacuna.proximaEn,
-      titulo: vacuna.codigo,
-      detalle: 'Vacuna',
-    })),
-  ].sort((a, b) => parsearFecha(b.cuando).getTime() - parsearFecha(a.cuando).getTime());
+  const proximas = expediente.citas
+    .filter((cita) => cita.estado === 'programada')
+    .sort((a, b) => parsearFecha(a.inicio).getTime() - parsearFecha(b.inicio).getTime());
+  const dosis = expediente.vacunas
+    .filter((vacuna) => !vacuna.aplicadaEn || parsearFecha(vacuna.proximaEn) > parsearFecha(vacuna.aplicadaEn))
+    .sort((a, b) => parsearFecha(a.proximaEn).getTime() - parsearFecha(b.proximaEn).getTime());
+  const diagnosticos = expediente.consultas.flatMap((consulta) =>
+    consulta.diagnosticos.map((diagnostico) => ({ ...diagnostico, cuando: consulta.ocurridaEn })),
+  );
+
+  const actividad = useMemo(
+    () =>
+      [
+        ...expediente.consultas.map((c) => ({ cuando: c.ocurridaEn, titulo: c.motivo, tipo: 'Consulta', icono: 'estetoscopio' as NombreIcono })),
+        ...expediente.citas.map((c) => ({ cuando: c.inicio, titulo: c.motivo, tipo: `Cita ${c.estado}`, icono: 'calendario' as NombreIcono })),
+        ...expediente.examenes.map((e) => ({ cuando: e.fecha, titulo: TIPOS_EXAMEN[e.tipoExamen]?.etiqueta ?? e.tipoExamen, tipo: 'Laboratorio', icono: 'matraz' as NombreIcono })),
+        ...expediente.mediciones.map((m) => ({ cuando: m.fecha, titulo: `${m.pesoKg} kg · ${m.tallaCm} cm`, tipo: 'Medición', icono: 'regla' as NombreIcono })),
+        ...(expediente.procedimientos ?? []).map((p) => ({ cuando: p.realizadoEn, titulo: `${p.tipo} · pieza ${p.codigoFdi}`, tipo: 'Procedimiento', icono: 'diente' as NombreIcono })),
+      ]
+        .sort((a, b) => parsearFecha(b.cuando).getTime() - parsearFecha(a.cuando).getTime())
+        .slice(0, 8),
+    [expediente],
+  );
 
   return (
-    <div className="resumen">
-      <dl className="cifras">
-        <div>
+    <div className="seccion">
+      <dl className="stats">
+        <div className="stat">
           <dt>Consultas</dt>
           <dd>{expediente.consultas.length}</dd>
         </div>
-        <div>
+        <div className="stat">
+          <dt>Citas próximas</dt>
+          <dd>{proximas.length}</dd>
+        </div>
+        <div className="stat">
           <dt>Exámenes</dt>
           <dd>{expediente.examenes.length}</dd>
         </div>
-        <div>
-          <dt>Citas</dt>
-          <dd>{expediente.citas.length}</dd>
-        </div>
-        <div>
-          <dt>Vacunas</dt>
-          <dd>{expediente.vacunas.length}</dd>
+        <div className="stat">
+          <dt>Dosis pendientes</dt>
+          <dd>{dosis.length}</dd>
         </div>
       </dl>
-      {eventos.length === 0 ? <p className="pista">Todavía no hay notas en esta hoja.</p> : null}
-      <ol className="linea">
-        {eventos.map((evento) => (
-          <li key={`${evento.detalle}-${evento.cuando}-${evento.titulo}`}>
-            <span>{evento.detalle}</span>
-            <strong>{evento.titulo}</strong>
-            <time dateTime={evento.cuando}>{fechaLegible(evento.cuando)}</time>
-          </li>
-        ))}
-      </ol>
+
+      <div className="graficas">
+        <section className="card">
+          <div className="card__header">
+            <h4>Diagnósticos</h4>
+            <EtiquetaClasificacion nivel="restringido" />
+          </div>
+          <div className="card__body">
+            {diagnosticos.length === 0 ? (
+              <p className="muted">Sin diagnósticos registrados.</p>
+            ) : (
+              <ul style={{ display: 'grid', gap: 8 }}>
+                {diagnosticos.slice(0, 5).map((d) => (
+                  <li key={d.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                    <span>
+                      {d.textoLibre} {d.esPrincipal ? <Insignia tono="neutral">Principal</Insignia> : null}
+                    </span>
+                    <time className="muted">{fechaLegible(d.cuando)}</time>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+        <section className="card">
+          <div className="card__header">
+            <h4>Próximo</h4>
+          </div>
+          <div className="card__body">
+            {proximas.length === 0 && dosis.length === 0 ? (
+              <p className="muted">Nada programado.</p>
+            ) : (
+              <ul style={{ display: 'grid', gap: 8 }}>
+                {proximas.slice(0, 3).map((cita) => (
+                  <li key={cita.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                    <span>
+                      <Icono nombre="calendario" className="muted" /> {cita.motivo}
+                    </span>
+                    <time className="muted">{fechaHora(cita.inicio)}</time>
+                  </li>
+                ))}
+                {dosis.slice(0, 3).map((vacuna) => (
+                  <li key={vacuna.codigo} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                    <span className="mono">{vacuna.codigo}</span>
+                    <EstadoDosis fecha={vacuna.proximaEn} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      </div>
+
+      <section className="card">
+        <div className="card__header">
+          <h4>Actividad reciente</h4>
+        </div>
+        <div className="card__body" style={{ paddingBlock: 4 }}>
+          {actividad.length === 0 ? (
+            <Vacio icono="nota" titulo="Expediente nuevo">
+              Todavía no hay registros. Empieza por una consulta.
+            </Vacio>
+          ) : (
+            <ol className="timeline">
+              {actividad.map((evento, indice) => (
+                <li key={`${evento.tipo}-${evento.cuando}-${indice}`} className="timeline__item">
+                  <span className="timeline__dot">
+                    <Icono nombre={evento.icono} />
+                  </span>
+                  <span>
+                    <span className="timeline__title">{evento.titulo}</span>
+                    <span className="timeline__meta" style={{ display: 'block' }}>
+                      {evento.tipo}
+                    </span>
+                  </span>
+                  <time dateTime={evento.cuando}>{fechaLegible(evento.cuando)}</time>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
 
-function Consultas({
-  expediente,
-  base,
-  cerrado,
-  ocupado,
-  onEnviar,
-}: AccionProps) {
-  const id = useId();
-  const [motivo, setMotivo] = useState('Control');
-  const [consultaId, setConsultaId] = useState(expediente.consultas[0]?.id ?? '');
-  const consultaActiva = expediente.consultas.some((consulta) => consulta.id === consultaId)
-    ? consultaId
-    : (expediente.consultas[0]?.id ?? '');
-  const [texto, setTexto] = useState('');
-  const [dosis, setDosis] = useState('1 tableta');
-  const [frecuencia, setFrecuencia] = useState('cada 8 horas');
-  const [citaId, setCitaId] = useState('');
-  const citasAbiertas = expediente.citas.filter((cita) => cita.estado === 'programada');
+/* ───────────── Consultas ───────────── */
+
+type DialogoConsulta = { tipo: 'consulta' } | { tipo: 'diagnostico' | 'receta'; consultaId: string; motivo: string } | null;
+
+function Consultas({ expediente, base, cerrado, ocupado, onEnviar }: AccionProps) {
+  const [dialogo, setDialogo] = useState<DialogoConsulta>(null);
+  const consultas = [...expediente.consultas].sort(
+    (a, b) => parsearFecha(b.ocurridaEn).getTime() - parsearFecha(a.ocurridaEn).getTime(),
+  );
 
   return (
     <div className="seccion">
-      {expediente.consultas.length === 0 ? <p className="pista">Sin consultas. La primera queda abajo.</p> : null}
-      {expediente.consultas.map((consulta) => (
-        <article key={consulta.id} className="nota">
-          <header>
-            <h3>{consulta.motivo}</h3>
-            <time dateTime={consulta.ocurridaEn}>{fechaHora(consulta.ocurridaEn)}</time>
-          </header>
-          {consulta.notas ? <p>{consulta.notas}</p> : null}
-          <ul>
-            {consulta.diagnosticos.map((item) => (
-              <li key={item.id}>
-                <span>Diagnóstico</span> {item.textoLibre}
-              </li>
-            ))}
-            {consulta.recetas.map((item) => (
-              <li key={item.id}>
-                <span>Receta</span> {item.textoLibre} · {item.dosis} · {item.frecuencia}
-              </li>
-            ))}
-          </ul>
-        </article>
-      ))}
-      {cerrado ? null : (
-        <div className="composer">
-          <form
-            onSubmit={(evento) => {
-              evento.preventDefault();
-              void onEnviar(`${base}/consultas`, { motivo, citaId: citaId || undefined });
-            }}
+      <SoloLectura cerrado={cerrado} />
+      <Barra
+        titulo="Consultas"
+        descripcion="Cada consulta agrupa sus diagnósticos y recetas."
+        clasificacion="restringido"
+        accion={
+          <BotonAgregar cerrado={cerrado} onClick={() => setDialogo({ tipo: 'consulta' })}>
+            Nueva consulta
+          </BotonAgregar>
+        }
+      />
+      {consultas.length === 0 ? (
+        <div className="card">
+          <Vacio
+            icono="estetoscopio"
+            titulo="Sin consultas"
+            accion={
+              cerrado ? undefined : (
+                <Boton icono="mas" onClick={() => setDialogo({ tipo: 'consulta' })}>
+                  Registrar la primera
+                </Boton>
+              )
+            }
           >
-            <h3>Nueva consulta</h3>
-            <label htmlFor={`${id}-motivo`}>Motivo</label>
-            <input id={`${id}-motivo`} value={motivo} onChange={(evento) => setMotivo(evento.target.value)} required />
-            <label htmlFor={`${id}-cita`}>Cita que se atiende</label>
-            <select id={`${id}-cita`} value={citaId} onChange={(evento) => setCitaId(evento.target.value)}>
+            Las consultas son la base del expediente: diagnósticos y recetas cuelgan de ellas.
+          </Vacio>
+        </div>
+      ) : (
+        consultas.map((consulta) => (
+          <article key={consulta.id} className="card">
+            <div className="card__body consulta">
+              <div className="consulta__cabeza">
+                <div>
+                  <h3>{consulta.motivo}</h3>
+                  <time dateTime={consulta.ocurridaEn}>{fechaHora(consulta.ocurridaEn)}</time>
+                </div>
+                {cerrado ? null : (
+                  <div className="consulta__acciones">
+                    <Boton
+                      tamano="sm"
+                      icono="nota"
+                      onClick={() => setDialogo({ tipo: 'diagnostico', consultaId: consulta.id, motivo: consulta.motivo })}
+                    >
+                      Diagnóstico
+                    </Boton>
+                    <Boton
+                      tamano="sm"
+                      icono="pastilla"
+                      onClick={() => setDialogo({ tipo: 'receta', consultaId: consulta.id, motivo: consulta.motivo })}
+                    >
+                      Receta
+                    </Boton>
+                  </div>
+                )}
+              </div>
+              {consulta.notas ? <p className="consulta__notas">{consulta.notas}</p> : null}
+              {consulta.diagnosticos.length + consulta.recetas.length > 0 ? (
+                <ul className="consulta__items">
+                  {consulta.diagnosticos.map((item) => (
+                    <li key={item.id} className="item-clinico">
+                      <span className="item-clinico__tipo">DIAGNÓSTICO</span>
+                      <span>
+                        {item.textoLibre} {item.esPrincipal ? <Insignia>Principal</Insignia> : null}
+                      </span>
+                    </li>
+                  ))}
+                  {consulta.recetas.map((item) => (
+                    <li key={item.id} className="item-clinico">
+                      <span className="item-clinico__tipo">RECETA</span>
+                      <span>
+                        {item.textoLibre}{' '}
+                        <span className="item-clinico__detalle">
+                          · {item.dosis} · {item.frecuencia}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="muted" style={{ fontSize: 'var(--text-sm)' }}>
+                  Sin diagnósticos ni recetas.
+                </p>
+              )}
+            </div>
+          </article>
+        ))
+      )}
+
+      <DialogoNuevaConsulta
+        abierto={dialogo?.tipo === 'consulta'}
+        expediente={expediente}
+        ocupado={ocupado}
+        onCerrar={() => setDialogo(null)}
+        onEnviar={async (cuerpo) => (await onEnviar(`${base}/consultas`, cuerpo, 'Consulta registrada.')) && setDialogo(null)}
+      />
+      {dialogo && dialogo.tipo === 'diagnostico' ? (
+        <DialogoDiagnostico
+          motivo={dialogo.motivo}
+          ocupado={ocupado}
+          onCerrar={() => setDialogo(null)}
+          onEnviar={async (cuerpo) =>
+            (await onEnviar(`${base}/consultas/${dialogo.consultaId}/diagnosticos`, cuerpo, 'Diagnóstico agregado.')) && setDialogo(null)
+          }
+        />
+      ) : null}
+      {dialogo && dialogo.tipo === 'receta' ? (
+        <DialogoReceta
+          motivo={dialogo.motivo}
+          ocupado={ocupado}
+          onCerrar={() => setDialogo(null)}
+          onEnviar={async (cuerpo) =>
+            (await onEnviar(`${base}/consultas/${dialogo.consultaId}/recetas`, cuerpo, 'Medicamento recetado.')) && setDialogo(null)
+          }
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function DialogoNuevaConsulta({
+  abierto,
+  expediente,
+  ocupado,
+  onCerrar,
+  onEnviar,
+}: {
+  abierto: boolean;
+  expediente: ExpedienteVista;
+  ocupado: boolean;
+  onCerrar: () => void;
+  onEnviar: (cuerpo: unknown) => void;
+}) {
+  const [motivo, setMotivo] = useState('');
+  const [notas, setNotas] = useState('');
+  const [citaId, setCitaId] = useState('');
+  const citas = expediente.citas.filter((cita) => cita.estado === 'programada');
+  return (
+    <Dialogo
+      abierto={abierto}
+      onCerrar={onCerrar}
+      titulo="Nueva consulta"
+      descripcion="Se registra con la fecha y hora actuales."
+      onEnviar={() => motivo.trim() && onEnviar({ motivo: motivo.trim(), notas: notas.trim() || undefined, citaId: citaId || undefined })}
+      pie={<PieDialogo onCancelar={onCerrar} ocupado={ocupado} texto="Registrar consulta" />}
+    >
+      <div className="form-grid">
+        <Campo etiqueta="Motivo de consulta">
+          {(p) => <input {...p} className="input" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej. Control de presión arterial" maxLength={250} required autoFocus />}
+        </Campo>
+        <Campo etiqueta="Notas" opcional>
+          {(p) => <textarea {...p} className="textarea" value={notas} onChange={(e) => setNotas(e.target.value)} />}
+        </Campo>
+        <Campo etiqueta="Cita que se atiende" opcional pista={citas.length === 0 ? 'No hay citas programadas.' : 'La cita queda marcada como atendida.'}>
+          {(p) => (
+            <select {...p} className="select" value={citaId} onChange={(e) => setCitaId(e.target.value)} disabled={citas.length === 0}>
               <option value="">Sin cita previa</option>
-              {citasAbiertas.map((cita) => (
-                <option key={cita.id} value={cita.id}>{cita.motivo}</option>
-              ))}
-            </select>
-            <button type="submit" disabled={ocupado}>Registrar</button>
-          </form>
-          <form
-            onSubmit={(evento) => {
-              evento.preventDefault();
-              void onEnviar(`${base}/consultas/${consultaActiva}/diagnosticos`, { textoLibre: texto, esPrincipal: true });
-            }}
-          >
-            <h3>Diagnóstico</h3>
-            <label htmlFor={`${id}-consulta`}>Consulta</label>
-            <select id={`${id}-consulta`} value={consultaActiva} onChange={(evento) => setConsultaId(evento.target.value)}>
-              {expediente.consultas.map((consulta) => (
-                <option key={consulta.id} value={consulta.id}>
-                  {consulta.motivo}
+              {citas.map((cita) => (
+                <option key={cita.id} value={cita.id}>
+                  {fechaHora(cita.inicio)} · {cita.motivo}
                 </option>
               ))}
             </select>
-            <label htmlFor={`${id}-texto`}>Texto</label>
-            <input id={`${id}-texto`} value={texto} onChange={(evento) => setTexto(evento.target.value)} required />
-            <button type="submit" disabled={ocupado || !consultaActiva}>Agregar</button>
-          </form>
-          <form
-            onSubmit={(evento: FormEvent) => {
-              evento.preventDefault();
-              void onEnviar(`${base}/consultas/${consultaActiva}/recetas`, {
-                textoLibre: texto || 'Paracetamol',
-                dosis,
-                frecuencia,
-              });
-            }}
-          >
-            <h3>Receta</h3>
-            <label htmlFor={`${id}-dosis`}>Dosis</label>
-            <input id={`${id}-dosis`} value={dosis} onChange={(evento) => setDosis(evento.target.value)} required />
-            <label htmlFor={`${id}-frecuencia`}>Frecuencia</label>
-            <input id={`${id}-frecuencia`} value={frecuencia} onChange={(evento) => setFrecuencia(evento.target.value)} required />
-            <button type="submit" disabled={ocupado || !consultaActiva}>Recetar</button>
-          </form>
-        </div>
-      )}
-    </div>
+          )}
+        </Campo>
+      </div>
+    </Dialogo>
   );
 }
+
+function DialogoDiagnostico({
+  motivo,
+  ocupado,
+  onCerrar,
+  onEnviar,
+}: {
+  motivo: string;
+  ocupado: boolean;
+  onCerrar: () => void;
+  onEnviar: (cuerpo: unknown) => void;
+}) {
+  const [texto, setTexto] = useState('');
+  const [codigo, setCodigo] = useState('');
+  const [principal, setPrincipal] = useState(true);
+  return (
+    <Dialogo
+      abierto
+      onCerrar={onCerrar}
+      titulo="Agregar diagnóstico"
+      descripcion={`Consulta: ${motivo}`}
+      onEnviar={() => texto.trim() && onEnviar({ textoLibre: texto.trim(), esPrincipal: principal, catalogoCodigo: codigo.trim() || undefined })}
+      pie={<PieDialogo onCancelar={onCerrar} ocupado={ocupado} texto="Agregar" />}
+    >
+      <div className="form-grid">
+        <Alerta tono="warning">Dato restringido: el acceso queda en la auditoría y nunca se escribe en logs.</Alerta>
+        <Campo etiqueta="Diagnóstico">
+          {(p) => <input {...p} className="input" value={texto} onChange={(e) => setTexto(e.target.value)} maxLength={350} required autoFocus />}
+        </Campo>
+        <Campo etiqueta="Código CIE-10" opcional>
+          {(p) => <input {...p} className="input mono" value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} placeholder="Ej. I10" />}
+        </Campo>
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="checkbox" checked={principal} onChange={(e) => setPrincipal(e.target.checked)} />
+          Diagnóstico principal de la consulta
+        </label>
+      </div>
+    </Dialogo>
+  );
+}
+
+function DialogoReceta({
+  motivo,
+  ocupado,
+  onCerrar,
+  onEnviar,
+}: {
+  motivo: string;
+  ocupado: boolean;
+  onCerrar: () => void;
+  onEnviar: (cuerpo: unknown) => void;
+}) {
+  const [medicamento, setMedicamento] = useState('');
+  const [dosis, setDosis] = useState('');
+  const [frecuencia, setFrecuencia] = useState('Cada 8 horas');
+  const [dias, setDias] = useState('');
+  return (
+    <Dialogo
+      abierto
+      onCerrar={onCerrar}
+      titulo="Recetar medicamento"
+      descripcion={`Consulta: ${motivo}`}
+      onEnviar={() =>
+        medicamento.trim() &&
+        dosis.trim() &&
+        onEnviar({ textoLibre: medicamento.trim(), dosis: dosis.trim(), frecuencia, duracionDias: dias ? Number(dias) : undefined })
+      }
+      pie={<PieDialogo onCancelar={onCerrar} ocupado={ocupado} texto="Recetar" />}
+    >
+      <div className="form-grid form-grid--2">
+        <Campo etiqueta="Medicamento" className="span-2">
+          {(p) => <input {...p} className="input" value={medicamento} onChange={(e) => setMedicamento(e.target.value)} placeholder="Ej. Paracetamol 500 mg" required autoFocus />}
+        </Campo>
+        <Campo etiqueta="Dosis">
+          {(p) => <input {...p} className="input" value={dosis} onChange={(e) => setDosis(e.target.value)} placeholder="1 tableta" required />}
+        </Campo>
+        <Campo etiqueta="Frecuencia">
+          {(p) => (
+            <select {...p} className="select" value={frecuencia} onChange={(e) => setFrecuencia(e.target.value)}>
+              {['Cada 4 horas', 'Cada 6 horas', 'Cada 8 horas', 'Cada 12 horas', 'Cada 24 horas', 'Dosis única', 'Según necesidad'].map((f) => (
+                <option key={f}>{f}</option>
+              ))}
+            </select>
+          )}
+        </Campo>
+        <Campo etiqueta="Duración (días)" opcional>
+          {(p) => <input {...p} className="input" type="number" min={1} value={dias} onChange={(e) => setDias(e.target.value)} />}
+        </Campo>
+      </div>
+    </Dialogo>
+  );
+}
+
+/* ───────────── Agenda ───────────── */
+
+const TONO_CITA: Record<string, Tono> = { programada: 'info', atendida: 'success', cancelada: 'neutral', inasistencia: 'warning' };
 
 function Agenda({ expediente, base, cerrado, ocupado, onEnviar }: AccionProps) {
-  const id = useId();
-  const [inicio, setInicio] = useState('2026-10-07T09:00');
-  const [fin, setFin] = useState('2026-10-07T09:30');
-  const [motivo, setMotivo] = useState('Control');
+  const [abierto, setAbierto] = useState(false);
+  const [inicio, setInicio] = useState(hoyHora(9));
+  const [duracion, setDuracion] = useState('30');
+  const [motivo, setMotivo] = useState('');
+  const citas = [...expediente.citas].sort((a, b) => parsearFecha(b.inicio).getTime() - parsearFecha(a.inicio).getTime());
 
   return (
     <div className="seccion">
-      {expediente.citas.length === 0 ? <p className="pista">No hay citas en esta hoja.</p> : null}
-      <ul className="citas">
-        {expediente.citas.map((cita) => (
-          <li key={cita.id}>
-            <time dateTime={cita.inicio}>{fechaHora(cita.inicio)}</time>
-            <strong>{cita.motivo}</strong>
-            <span>{cita.estado}</span>
-            {cita.estado === 'programada' && !cerrado ? (
-              <span className="acciones-cita">
-                <button type="button" className="fantasma" disabled={ocupado} onClick={() => void onEnviar(`${base}/citas/${cita.id}/cerrar`, { estado: 'cancelada' })}>Cancelar</button>
-                <button type="button" className="fantasma" disabled={ocupado} onClick={() => void onEnviar(`${base}/citas/${cita.id}/cerrar`, { estado: 'inasistencia' })}>Inasistencia</button>
-              </span>
-            ) : null}
-          </li>
-        ))}
-      </ul>
-      {cerrado ? null : (
-        <form
-          className="composer solo"
-          onSubmit={(evento) => {
-            evento.preventDefault();
-            void onEnviar(`${base}/citas`, {
-              inicio: new Date(inicio).toISOString(),
-              fin: new Date(fin).toISOString(),
-              motivo,
-            });
-          }}
-        >
-          <h3>Reservar cita</h3>
-          <label htmlFor={`${id}-inicio`}>Inicio</label>
-          <input id={`${id}-inicio`} type="datetime-local" value={inicio} onChange={(evento) => setInicio(evento.target.value)} required />
-          <label htmlFor={`${id}-fin`}>Fin</label>
-          <input id={`${id}-fin`} type="datetime-local" value={fin} onChange={(evento) => setFin(evento.target.value)} required />
-          <label htmlFor={`${id}-motivo`}>Motivo</label>
-          <input id={`${id}-motivo`} value={motivo} onChange={(evento) => setMotivo(evento.target.value)} required />
-          <button type="submit" disabled={ocupado}>Reservar</button>
-        </form>
+      <SoloLectura cerrado={cerrado} />
+      <Barra
+        titulo="Agenda"
+        descripcion="Las citas no pueden solaparse; el motor lo garantiza."
+        accion={
+          <BotonAgregar cerrado={cerrado} onClick={() => setAbierto(true)}>
+            Reservar cita
+          </BotonAgregar>
+        }
+      />
+      {citas.length === 0 ? (
+        <div className="card">
+          <Vacio icono="calendario" titulo="Sin citas">
+            Reserva una cita para este paciente.
+          </Vacio>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th scope="col">Fecha</th>
+                <th scope="col">Duración</th>
+                <th scope="col">Motivo</th>
+                <th scope="col">Estado</th>
+                <th scope="col" className="acciones">
+                  <span className="sr-only">Acciones</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {citas.map((cita) => (
+                <tr key={cita.id}>
+                  <td>
+                    <time dateTime={cita.inicio}>{fechaHora(cita.inicio)}</time>
+                  </td>
+                  <td className="muted">{Math.round((parsearFecha(cita.fin).getTime() - parsearFecha(cita.inicio).getTime()) / 60000)} min</td>
+                  <td>{cita.motivo}</td>
+                  <td>
+                    <Insignia tono={TONO_CITA[cita.estado] ?? 'neutral'} punto>
+                      <span style={{ textTransform: 'capitalize' }}>{cita.estado}</span>
+                    </Insignia>
+                  </td>
+                  <td className="acciones">
+                    {cita.estado === 'programada' && !cerrado ? (
+                      <span style={{ display: 'inline-flex', gap: 4 }}>
+                        <Boton variante="ghost" tamano="sm" disabled={ocupado} onClick={() => void onEnviar(`${base}/citas/${cita.id}/cerrar`, { estado: 'inasistencia' }, 'Inasistencia registrada.')}>
+                          No asistió
+                        </Boton>
+                        <Boton variante="ghost" tamano="sm" disabled={ocupado} onClick={() => void onEnviar(`${base}/citas/${cita.id}/cerrar`, { estado: 'cancelada' }, 'Cita cancelada.')}>
+                          Cancelar
+                        </Boton>
+                      </span>
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
+
+      <Dialogo
+        abierto={abierto}
+        onCerrar={() => setAbierto(false)}
+        titulo="Reservar cita"
+        onEnviar={async () => {
+          if (!motivo.trim()) return;
+          const desde = new Date(inicio);
+          const hasta = new Date(desde.getTime() + Number(duracion) * 60000);
+          if (await onEnviar(`${base}/citas`, { inicio: desde.toISOString(), fin: hasta.toISOString(), motivo: motivo.trim() }, 'Cita reservada.')) {
+            setAbierto(false);
+            setMotivo('');
+          }
+        }}
+        pie={<PieDialogo onCancelar={() => setAbierto(false)} ocupado={ocupado} texto="Reservar" />}
+      >
+        <div className="form-grid form-grid--2">
+          <Campo etiqueta="Inicio">
+            {(p) => <input {...p} className="input" type="datetime-local" value={inicio} onChange={(e) => setInicio(e.target.value)} required />}
+          </Campo>
+          <Campo etiqueta="Duración">
+            {(p) => (
+              <select {...p} className="select" value={duracion} onChange={(e) => setDuracion(e.target.value)}>
+                {['15', '30', '45', '60', '90'].map((m) => (
+                  <option key={m} value={m}>
+                    {m} minutos
+                  </option>
+                ))}
+              </select>
+            )}
+          </Campo>
+          <Campo etiqueta="Motivo" className="span-2">
+            {(p) => <input {...p} className="input" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ej. Control mensual" required />}
+          </Campo>
+        </div>
+      </Dialogo>
     </div>
   );
 }
+
+/* ───────────── Laboratorio ───────────── */
+
+const TONO_EXAMEN: Record<string, Tono> = { registrado: 'info', validado: 'success', anulado: 'neutral' };
 
 function Laboratorio({ expediente, base, cerrado, ocupado, onEnviar }: AccionProps) {
-  const id = useId();
-  const [tipoExamen, setTipoExamen] = useState('hematologia');
-  const [fecha, setFecha] = useState('2026-10-06');
-  const [valorA, setValorA] = useState('');
-  const [valorB, setValorB] = useState('');
-  const campos = CAMPOS[tipoExamen] ?? CAMPOS.otro;
+  const [abierto, setAbierto] = useState(false);
+  const [tipo, setTipo] = useState('hematologia');
+  const [fecha, setFecha] = useState(hoyIso());
+  const [valores, setValores] = useState<Record<string, string>>({});
+  const definicion = TIPOS_EXAMEN[tipo];
+  const examenes = [...expediente.examenes].sort((a, b) => parsearFecha(b.fecha).getTime() - parsearFecha(a.fecha).getTime());
+  const completo = definicion.campos.every((campo) => valores[campo.clave]?.trim());
 
   return (
     <div className="seccion">
-      {expediente.examenes.length === 0 ? <p className="pista">Sin resultados. Cada tipo de examen pide sus propios campos.</p> : null}
-      <div className="resultados">
-        {expediente.examenes.map((examen) => (
-          <article key={examen.id} className="nota">
-            <header>
-              <h3>{examen.tipoExamen}</h3>
-              <time dateTime={examen.fecha}>{fechaLegible(examen.fecha)} · {examen.estado ?? 'registrado'}</time>
-            </header>
-            <dl>
-              {Object.entries(examen.valores).map(([campo, valor]) => (
-                <div key={campo}>
-                  <dt>{campo}</dt>
-                  <dd>{valor}</dd>
+      <SoloLectura cerrado={cerrado} />
+      <Barra
+        titulo="Resultados de laboratorio"
+        descripcion="Cada tipo de examen tiene su propia estructura."
+        clasificacion="restringido"
+        accion={
+          <BotonAgregar cerrado={cerrado} onClick={() => setAbierto(true)}>
+            Registrar resultado
+          </BotonAgregar>
+        }
+      />
+      {examenes.length === 0 ? (
+        <div className="card">
+          <Vacio icono="matraz" titulo="Sin resultados">
+            Hematología, orina y cultivo piden campos distintos.
+          </Vacio>
+        </div>
+      ) : (
+        <div className="grid-cards">
+          {examenes.map((examen) => {
+            const estado = examen.estado ?? 'registrado';
+            return (
+              <article key={examen.id} className="card" style={estado === 'anulado' ? { opacity: 0.65 } : undefined}>
+                <div className="card__header">
+                  <div>
+                    <h4>{TIPOS_EXAMEN[examen.tipoExamen]?.etiqueta ?? examen.tipoExamen}</h4>
+                    <time className="muted" style={{ fontSize: 'var(--text-sm)' }} dateTime={examen.fecha}>
+                      {fechaLegible(examen.fecha)}
+                    </time>
+                  </div>
+                  <Insignia tono={TONO_EXAMEN[estado] ?? 'neutral'} punto>
+                    <span style={{ textTransform: 'capitalize' }}>{estado}</span>
+                  </Insignia>
                 </div>
-              ))}
-            </dl>
-            {!cerrado && (examen.estado ?? 'registrado') !== 'anulado' ? (
-              <div className="acciones-cita">
-                {(examen.estado ?? 'registrado') === 'registrado' ? (
-                  <button type="button" disabled={ocupado} onClick={() => void onEnviar(`${base}/examenes/${examen.id}/dictamen`, { estado: 'validado' })}>Validar</button>
+                <div className="card__body">
+                  <dl className="kv">
+                    {Object.entries(examen.valores).map(([campo, valor]) => (
+                      <div key={campo}>
+                        <dt>{etiquetaCampo(examen.tipoExamen, campo)}</dt>
+                        <dd>{valor}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+                {!cerrado && estado === 'registrado' ? (
+                  <div className="card__footer">
+                    <Boton variante="ghost" tamano="sm" disabled={ocupado} onClick={() => void onEnviar(`${base}/examenes/${examen.id}/dictamen`, { estado: 'anulado' }, 'Resultado anulado.')}>
+                      Anular
+                    </Boton>
+                    <Boton variante="primary" tamano="sm" icono="check" disabled={ocupado} onClick={() => void onEnviar(`${base}/examenes/${examen.id}/dictamen`, { estado: 'validado' }, 'Resultado validado.')}>
+                      Validar
+                    </Boton>
+                  </div>
                 ) : null}
-                <button type="button" className="fantasma" disabled={ocupado} onClick={() => void onEnviar(`${base}/examenes/${examen.id}/dictamen`, { estado: 'anulado' })}>Anular</button>
-              </div>
-            ) : null}
-          </article>
-        ))}
-      </div>
-      {cerrado ? null : (
-        <form
-          className="composer solo"
-          onSubmit={(evento) => {
-            evento.preventDefault();
-            void onEnviar(`${base}/examenes`, {
-              tipoExamen,
-              fecha,
-              valores: { [campos[0]]: valorA, [campos[1]]: valorB },
-            });
-          }}
-        >
-          <h3>Registrar resultado</h3>
-          <label htmlFor={`${id}-fecha`}>Fecha</label>
-          <input id={`${id}-fecha`} type="date" value={fecha} onChange={(evento) => setFecha(evento.target.value)} required />
-          <label htmlFor={`${id}-tipo`}>Tipo</label>
-          <select id={`${id}-tipo`} value={tipoExamen} onChange={(evento) => setTipoExamen(evento.target.value)}>
-            <option value="hematologia">Hematología</option>
-            <option value="orina">Orina</option>
-            <option value="cultivo">Cultivo</option>
-            <option value="otro">Otro</option>
-          </select>
-          <label htmlFor={`${id}-a`}>{campos[0]}</label>
-          <input id={`${id}-a`} value={valorA} onChange={(evento) => setValorA(evento.target.value)} required />
-          <label htmlFor={`${id}-b`}>{campos[1]}</label>
-          <input id={`${id}-b`} value={valorB} onChange={(evento) => setValorB(evento.target.value)} required={campos[0] !== campos[1] && tipoExamen !== 'otro'} />
-          <button type="submit" disabled={ocupado}>Guardar resultado</button>
-        </form>
+              </article>
+            );
+          })}
+        </div>
       )}
+
+      <Dialogo
+        abierto={abierto}
+        onCerrar={() => setAbierto(false)}
+        titulo="Registrar resultado"
+        descripcion="Los campos cambian según el tipo de examen."
+        onEnviar={async () => {
+          if (!completo) return;
+          const cuerpo = Object.fromEntries(definicion.campos.map((c) => [c.clave, valores[c.clave].trim()]));
+          if (await onEnviar(`${base}/examenes`, { tipoExamen: tipo, fecha, valores: cuerpo }, 'Resultado registrado.')) {
+            setAbierto(false);
+            setValores({});
+          }
+        }}
+        pie={<PieDialogo onCancelar={() => setAbierto(false)} ocupado={ocupado} texto="Guardar resultado" />}
+      >
+        <div className="form-grid form-grid--2">
+          <div className="field span-2">
+            <span className="field__label" id="tipo-examen">
+              Tipo de examen
+            </span>
+            <div className="segmented" role="radiogroup" aria-labelledby="tipo-examen">
+              {Object.entries(TIPOS_EXAMEN).map(([clave, def]) => (
+                <label key={clave}>
+                  <input
+                    type="radio"
+                    name="tipo-examen"
+                    checked={tipo === clave}
+                    onChange={() => {
+                      setTipo(clave);
+                      setValores({});
+                    }}
+                  />
+                  {def.etiqueta}
+                </label>
+              ))}
+            </div>
+          </div>
+          <Campo etiqueta="Fecha de toma">
+            {(p) => <input {...p} className="input" type="date" max={hoyIso()} value={fecha} onChange={(e) => setFecha(e.target.value)} required />}
+          </Campo>
+          <span />
+          {definicion.campos.map((campo) => (
+            <Campo key={`${tipo}-${campo.clave}`} etiqueta={campo.etiqueta} pista={campo.pista} className={definicion.campos.length === 1 ? 'span-2' : ''}>
+              {(p) => (
+                <input
+                  {...p}
+                  className="input"
+                  value={valores[campo.clave] ?? ''}
+                  onChange={(e) => setValores((actual) => ({ ...actual, [campo.clave]: e.target.value }))}
+                  required
+                />
+              )}
+            </Campo>
+          ))}
+        </div>
+      </Dialogo>
     </div>
   );
 }
 
+function etiquetaCampo(tipo: string, clave: string): string {
+  const campo = TIPOS_EXAMEN[tipo]?.campos.find((c) => c.clave === clave);
+  return campo ? `${campo.etiqueta}${campo.pista ? ` (${campo.pista})` : ''}` : clave;
+}
+
+/* ───────────── Crecimiento ───────────── */
+
 function Crecimiento({ expediente, base, cerrado, ocupado, onEnviar }: AccionProps) {
-  const id = useId();
-  const [fecha, setFecha] = useState('2026-10-06');
-  const [peso, setPeso] = useState('12.4');
-  const [talla, setTalla] = useState('86');
-  const maximo = Math.max(...expediente.mediciones.map((medicion) => medicion.pesoKg), 1);
+  const [abierto, setAbierto] = useState(false);
+  const [fecha, setFecha] = useState(hoyIso());
+  const [peso, setPeso] = useState('');
+  const [talla, setTalla] = useState('');
+  const [verTabla, setVerTabla] = useState(false);
+  const mediciones = [...expediente.mediciones].sort((a, b) => parsearFecha(a.fecha).getTime() - parsearFecha(b.fecha).getTime());
 
   return (
     <div className="seccion">
-      {expediente.mediciones.length === 0 ? <p className="pista">Aún no hay puntos en la curva.</p> : null}
-      <ul className="curva">
-        {expediente.mediciones.map((medicion) => (
-          <li key={medicion.fecha}>
-            <time dateTime={medicion.fecha}>{fechaLegible(medicion.fecha)}</time>
-            <span className="barra" style={{ width: `${Math.max(8, (medicion.pesoKg / maximo) * 100)}%` }} />
-            <strong>
-              {medicion.pesoKg} kg · {medicion.tallaCm} cm
-            </strong>
-          </li>
-        ))}
-      </ul>
-      {cerrado ? null : (
-        <form
-          className="composer solo"
-          onSubmit={(evento) => {
-            evento.preventDefault();
-            void onEnviar(`${base}/mediciones`, { fecha, pesoKg: Number(peso), tallaCm: Number(talla) });
-          }}
-        >
-          <h3>Nueva medición</h3>
-          <label htmlFor={`${id}-fecha`}>Fecha</label>
-          <input id={`${id}-fecha`} type="date" value={fecha} onChange={(evento) => setFecha(evento.target.value)} required />
-          <label htmlFor={`${id}-peso`}>Peso (kg)</label>
-          <input id={`${id}-peso`} value={peso} onChange={(evento) => setPeso(evento.target.value)} inputMode="decimal" required />
-          <label htmlFor={`${id}-talla`}>Talla (cm)</label>
-          <input id={`${id}-talla`} value={talla} onChange={(evento) => setTalla(evento.target.value)} inputMode="decimal" required />
-          <button type="submit" disabled={ocupado}>Registrar medición</button>
-        </form>
+      <SoloLectura cerrado={cerrado} />
+      <Barra
+        titulo="Curva de crecimiento"
+        descripcion="Peso y talla en el tiempo."
+        clasificacion="restringido"
+        accion={
+          <span style={{ display: 'flex', gap: 8 }}>
+            {mediciones.length > 0 ? (
+              <Boton variante="ghost" aria-pressed={verTabla} onClick={() => setVerTabla((v) => !v)}>
+                {verTabla ? 'Ver gráfica' : 'Ver tabla'}
+              </Boton>
+            ) : null}
+            <BotonAgregar cerrado={cerrado} onClick={() => setAbierto(true)}>
+              Nueva medición
+            </BotonAgregar>
+          </span>
+        }
+      />
+      {mediciones.length === 0 ? (
+        <div className="card">
+          <Vacio icono="grafica" titulo="Sin mediciones">
+            Registra peso y talla para trazar la curva.
+          </Vacio>
+        </div>
+      ) : verTabla ? (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th scope="col">Fecha</th>
+                <th scope="col">Peso (kg)</th>
+                <th scope="col">Talla (cm)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...mediciones].reverse().map((m) => (
+                <tr key={m.fecha}>
+                  <td>{fechaLegible(m.fecha)}</td>
+                  <td>{m.pesoKg}</td>
+                  <td>{m.tallaCm}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="graficas">
+          <Grafica titulo="Peso" unidad="kg" puntos={mediciones.map((m) => ({ fecha: m.fecha, valor: m.pesoKg }))} />
+          <Grafica titulo="Talla" unidad="cm" puntos={mediciones.map((m) => ({ fecha: m.fecha, valor: m.tallaCm }))} />
+        </div>
       )}
+
+      <Dialogo
+        abierto={abierto}
+        onCerrar={() => setAbierto(false)}
+        titulo="Nueva medición"
+        pequeno
+        onEnviar={async () => {
+          const kg = Number(peso.replace(',', '.'));
+          const cm = Number(talla.replace(',', '.'));
+          if (!(kg > 0 && cm > 0)) return;
+          if (await onEnviar(`${base}/mediciones`, { fecha, pesoKg: kg, tallaCm: cm }, 'Medición registrada.')) {
+            setAbierto(false);
+            setPeso('');
+            setTalla('');
+          }
+        }}
+        pie={<PieDialogo onCancelar={() => setAbierto(false)} ocupado={ocupado} texto="Registrar" />}
+      >
+        <div className="form-grid form-grid--2">
+          <Campo etiqueta="Fecha" className="span-2">
+            {(p) => <input {...p} className="input" type="date" max={hoyIso()} value={fecha} onChange={(e) => setFecha(e.target.value)} required />}
+          </Campo>
+          <Campo etiqueta="Peso" pista="kg">
+            {(p) => <input {...p} className="input num" value={peso} onChange={(e) => setPeso(e.target.value)} inputMode="decimal" placeholder="12.4" required autoFocus />}
+          </Campo>
+          <Campo etiqueta="Talla" pista="cm">
+            {(p) => <input {...p} className="input num" value={talla} onChange={(e) => setTalla(e.target.value)} inputMode="decimal" placeholder="86" required />}
+          </Campo>
+        </div>
+      </Dialogo>
     </div>
+  );
+}
+
+/* ───────────── Vacunas ───────────── */
+
+function EstadoDosis({ fecha }: { fecha: string }) {
+  if (vencida(fecha)) {
+    return (
+      <Insignia tono="danger" punto>
+        Vencida · {fechaRelativa(fecha)}
+      </Insignia>
+    );
+  }
+  return (
+    <Insignia tono="info" punto>
+      {fechaRelativa(fecha)}
+    </Insignia>
   );
 }
 
 function Vacunas({ expediente, base, cerrado, ocupado, onEnviar }: AccionProps) {
-  const id = useId();
-  const [codigo, setCodigo] = useState('SRP');
-  const [proximaEn, setProximaEn] = useState('2026-12-01');
+  const [abierto, setAbierto] = useState(false);
+  const [codigo, setCodigo] = useState('');
+  const [proximaEn, setProximaEn] = useState(hoyIso(30));
   const [aplicadaEn, setAplicadaEn] = useState('');
+  const vacunas = [...expediente.vacunas].sort((a, b) => parsearFecha(a.proximaEn).getTime() - parsearFecha(b.proximaEn).getTime());
+  const vencidas = vacunas.filter((v) => vencida(v.proximaEn)).length;
 
   return (
     <div className="seccion">
-      {expediente.vacunas.length === 0 ? <p className="pista">El esquema todavía está vacío.</p> : null}
-      <ul className="citas">
-        {expediente.vacunas.map((vacuna) => (
-          <li key={vacuna.codigo}>
-            <strong>{vacuna.codigo}</strong>
-            <time dateTime={vacuna.proximaEn}>{fechaLegible(vacuna.proximaEn)}</time>
-            <span className={vencida(vacuna.proximaEn) ? 'sello' : ''}>{vencida(vacuna.proximaEn) ? 'Vencida' : 'Pendiente'}</span>
-          </li>
-        ))}
-      </ul>
-      {cerrado ? null : (
-        <form
-          className="composer solo"
-          onSubmit={(evento) => {
-            evento.preventDefault();
-            void onEnviar(`${base}/vacunas`, { codigo, proximaEn, aplicadaEn: aplicadaEn || undefined });
-          }}
-        >
-          <h3>Programar dosis</h3>
-          <label htmlFor={`${id}-codigo`}>Vacuna</label>
-          <input id={`${id}-codigo`} value={codigo} onChange={(evento) => setCodigo(evento.target.value)} required />
-          <label htmlFor={`${id}-aplicada`}>Aplicada el</label>
-          <input id={`${id}-aplicada`} type="date" value={aplicadaEn} onChange={(evento) => setAplicadaEn(evento.target.value)} />
-          <label htmlFor={`${id}-proxima`}>Próxima dosis</label>
-          <input id={`${id}-proxima`} type="date" value={proximaEn} onChange={(evento) => setProximaEn(evento.target.value)} required />
-          <button type="submit" disabled={ocupado}>Programar</button>
-        </form>
+      <SoloLectura cerrado={cerrado} />
+      <Barra
+        titulo="Esquema de vacunación"
+        descripcion="Ordenado por próxima dosis."
+        clasificacion="restringido"
+        accion={
+          <BotonAgregar cerrado={cerrado} onClick={() => setAbierto(true)}>
+            Programar dosis
+          </BotonAgregar>
+        }
+      />
+      {vencidas > 0 ? (
+        <Alerta tono="warning" titulo={`${vencidas} ${vencidas === 1 ? 'dosis vencida' : 'dosis vencidas'}`}>
+          Revisa el esquema y reprograma.
+        </Alerta>
+      ) : null}
+      {vacunas.length === 0 ? (
+        <div className="card">
+          <Vacio icono="jeringa" titulo="Esquema vacío">
+            Programa la primera dosis.
+          </Vacio>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th scope="col">Vacuna</th>
+                <th scope="col">Última aplicación</th>
+                <th scope="col">Próxima dosis</th>
+                <th scope="col">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vacunas.map((vacuna) => (
+                <tr key={vacuna.codigo}>
+                  <td className="mono">{vacuna.codigo}</td>
+                  <td className="muted">{vacuna.aplicadaEn ? fechaLegible(vacuna.aplicadaEn) : '—'}</td>
+                  <td>{fechaLegible(vacuna.proximaEn)}</td>
+                  <td>
+                    <EstadoDosis fecha={vacuna.proximaEn} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
+
+      <Dialogo
+        abierto={abierto}
+        onCerrar={() => setAbierto(false)}
+        titulo="Programar dosis"
+        pequeno
+        onEnviar={async () => {
+          if (!codigo.trim()) return;
+          if (await onEnviar(`${base}/vacunas`, { codigo: codigo.trim(), proximaEn, aplicadaEn: aplicadaEn || undefined }, 'Dosis programada.')) {
+            setAbierto(false);
+            setCodigo('');
+            setAplicadaEn('');
+          }
+        }}
+        pie={<PieDialogo onCancelar={() => setAbierto(false)} ocupado={ocupado} texto="Programar" />}
+      >
+        <div className="form-grid">
+          <Campo etiqueta="Vacuna" pista="Código del esquema nacional, ej. SRP, DPT, BCG">
+            {(p) => <input {...p} className="input mono" value={codigo} onChange={(e) => setCodigo(e.target.value.toUpperCase())} required autoFocus />}
+          </Campo>
+          <Campo etiqueta="Aplicada el" opcional>
+            {(p) => <input {...p} className="input" type="date" max={hoyIso()} value={aplicadaEn} onChange={(e) => setAplicadaEn(e.target.value)} />}
+          </Campo>
+          <Campo etiqueta="Próxima dosis">
+            {(p) => <input {...p} className="input" type="date" value={proximaEn} onChange={(e) => setProximaEn(e.target.value)} required />}
+          </Campo>
+        </div>
+      </Dialogo>
     </div>
   );
 }
+
+/* ───────────── Odontograma ───────────── */
 
 function Odontograma({ expediente, base, cerrado, ocupado, onEnviar }: AccionProps) {
   const [activa, setActiva] = useState<number | null>(null);
+  const [abierto, setAbierto] = useState(false);
   const [consultaId, setConsultaId] = useState(expediente.consultas[0]?.id ?? '');
-  const [tipo, setTipo] = useState('Obturación');
+  const [tipo, setTipo] = useState('');
   const [descripcion, setDescripcion] = useState('');
   const estadoDe = (codigo: number) => expediente.piezas.find((pieza) => pieza.codigoFdi === codigo)?.estado ?? 'sano';
+  const procedimientos = (expediente.procedimientos ?? []).filter((item) => item.codigoFdi === activa);
+  const conteo = ESTADOS_PIEZA.filter((e) => e !== 'sano')
+    .map((estado) => [estado, expediente.piezas.filter((p) => p.estado === estado).length] as const)
+    .filter(([, n]) => n > 0);
 
   return (
     <div className="seccion">
-      <p className="pista">Dentición permanente, notación FDI. Elige una pieza y su estado.</p>
-      <div className="boca" role="group" aria-label="Odontograma">
-        {CUADRANTES.map((fila) => (
-          <div key={fila[0]} className="arcada">
-            {fila.map((codigo) => (
-              <button
-                key={codigo}
-                type="button"
-                className={`diente ${estadoDe(codigo)} ${activa === codigo ? 'activa' : ''}`}
-                aria-pressed={activa === codigo}
-                aria-label={`Pieza ${codigo}, ${estadoDe(codigo)}`}
-                onClick={() => setActiva(codigo)}
-              >
-                <span>{codigo}</span>
-              </button>
-            ))}
-          </div>
-        ))}
-      </div>
-      {(expediente.procedimientos ?? []).filter((item) => item.codigoFdi === activa).map((item) => (
-        <p key={item.id}>{item.tipo}: {item.descripcion}</p>
-      ))}
-      {activa && !cerrado ? (
-        <div className="estados" role="group" aria-label={`Estado de la pieza ${activa}`}>
-          {ESTADOS_PIEZA.map((estado) => (
-            <button
-              key={estado}
-              type="button"
-              className={estadoDe(activa) === estado ? 'chip activo' : 'chip'}
-              disabled={ocupado}
-              onClick={() => void onEnviar(`${base}/piezas`, { codigoFdi: activa, estado })}
-            >
-              {estado}
-            </button>
+      <SoloLectura cerrado={cerrado} />
+      <Barra titulo="Odontograma" descripcion="Dentición permanente, notación FDI. Selecciona una pieza." clasificacion="restringido" />
+      <section className="card">
+        <div className="odontograma" role="group" aria-label="Odontograma">
+          {ARCADAS.map((fila, indice) => (
+            <div key={fila[0]}>
+              {indice === 1 ? <div className="arcada__sep" aria-hidden="true" /> : null}
+              <div className="arcada">
+                {fila.map((codigo) => (
+                  <button
+                    key={codigo}
+                    type="button"
+                    className={`diente estado-${estadoDe(codigo)}`}
+                    aria-pressed={activa === codigo}
+                    aria-label={`Pieza ${codigo}, ${estadoDe(codigo)}`}
+                    onClick={() => setActiva(activa === codigo ? null : codigo)}
+                  >
+                    <span className="diente__marca" />
+                    {codigo}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
-      ) : null}
-      {activa && !cerrado && expediente.consultas.length > 0 ? (
-        <form
-          className="composer solo"
-          onSubmit={(evento) => {
-            evento.preventDefault();
-            void onEnviar(`${base}/procedimientos`, { codigoFdi: activa, consultaId, tipo, descripcion });
-          }}
-        >
-          <h3>Procedimiento en pieza {activa}</h3>
-          <label htmlFor="proc-consulta">Consulta</label>
-          <select id="proc-consulta" value={consultaId} onChange={(evento) => setConsultaId(evento.target.value)}>
-            {expediente.consultas.map((consulta) => (
-              <option key={consulta.id} value={consulta.id}>{consulta.motivo}</option>
+        <div className="card__footer" style={{ justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <div className="leyenda" aria-label="Leyenda">
+            {ESTADOS_PIEZA.map((estado) => (
+              <span key={estado} className={`estado-${estado}`}>
+                <span className="diente__marca" /> {estado}
+              </span>
             ))}
-          </select>
-          <label htmlFor="proc-tipo">Tipo</label>
-          <input id="proc-tipo" value={tipo} onChange={(evento) => setTipo(evento.target.value)} required />
-          <label htmlFor="proc-desc">Descripción</label>
-          <input id="proc-desc" value={descripcion} onChange={(evento) => setDescripcion(evento.target.value)} required />
-          <button type="submit" disabled={ocupado}>Registrar procedimiento</button>
-        </form>
+          </div>
+          <span className="muted" style={{ fontSize: 'var(--text-xs)' }}>
+            {conteo.length === 0 ? 'Todas las piezas sanas' : conteo.map(([e, n]) => `${n} ${e}`).join(' · ')}
+          </span>
+        </div>
+      </section>
+
+      {activa ? (
+        <section className="card aparece">
+          <div className="card__header">
+            <h4>
+              Pieza {activa} · <span style={{ textTransform: 'capitalize' }}>{estadoDe(activa)}</span>
+            </h4>
+            {!cerrado ? (
+              <Boton tamano="sm" icono="mas" disabled={expediente.consultas.length === 0} onClick={() => setAbierto(true)}>
+                Procedimiento
+              </Boton>
+            ) : null}
+          </div>
+          <div className="card__body" style={{ display: 'grid', gap: 16 }}>
+            {!cerrado ? (
+              <div>
+                <p className="field__label" style={{ marginBottom: 8 }}>
+                  Estado de la pieza
+                </p>
+                <div className="chips" role="group" aria-label={`Estado de la pieza ${activa}`}>
+                  {ESTADOS_PIEZA.map((estado) => (
+                    <button
+                      key={estado}
+                      type="button"
+                      className={`chip estado-${estado}`}
+                      aria-pressed={estadoDe(activa) === estado}
+                      disabled={ocupado}
+                      onClick={() => void onEnviar(`${base}/piezas`, { codigoFdi: activa, estado }, `Pieza ${activa}: ${estado}.`)}
+                    >
+                      <span className="diente__marca" />
+                      {estado}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div>
+              <p className="field__label" style={{ marginBottom: 8 }}>
+                Procedimientos
+              </p>
+              {procedimientos.length === 0 ? (
+                <p className="muted">
+                  {expediente.consultas.length === 0 ? 'Registra una consulta antes de anotar procedimientos.' : 'Sin procedimientos en esta pieza.'}
+                </p>
+              ) : (
+                <ul className="consulta__items">
+                  {procedimientos.map((item) => (
+                    <li key={item.id} className="item-clinico">
+                      <span className="item-clinico__tipo">{fechaLegible(item.realizadoEn)}</span>
+                      <span>
+                        <strong style={{ fontWeight: 500 }}>{item.tipo}</strong> <span className="item-clinico__detalle">· {item.descripcion}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {activa ? (
+        <Dialogo
+          abierto={abierto}
+          onCerrar={() => setAbierto(false)}
+          titulo={`Procedimiento en pieza ${activa}`}
+          onEnviar={async () => {
+            if (!tipo.trim() || !descripcion.trim()) return;
+            if (
+              await onEnviar(
+                `${base}/procedimientos`,
+                { codigoFdi: activa, consultaId: consultaId || expediente.consultas[0]?.id, tipo: tipo.trim(), descripcion: descripcion.trim() },
+                'Procedimiento registrado.',
+              )
+            ) {
+              setAbierto(false);
+              setTipo('');
+              setDescripcion('');
+            }
+          }}
+          pie={<PieDialogo onCancelar={() => setAbierto(false)} ocupado={ocupado} texto="Registrar" />}
+        >
+          <div className="form-grid">
+            <Campo etiqueta="Consulta">
+              {(p) => (
+                <select {...p} className="select" value={consultaId} onChange={(e) => setConsultaId(e.target.value)}>
+                  {expediente.consultas.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {fechaLegible(c.ocurridaEn)} · {c.motivo}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </Campo>
+            <Campo etiqueta="Tipo">
+              {(p) => (
+                <>
+                  <input {...p} className="input" list="tipos-procedimiento" value={tipo} onChange={(e) => setTipo(e.target.value)} required autoFocus />
+                  <datalist id="tipos-procedimiento">
+                    {['Obturación', 'Extracción', 'Endodoncia', 'Corona', 'Limpieza', 'Sellante'].map((t) => (
+                      <option key={t} value={t} />
+                    ))}
+                  </datalist>
+                </>
+              )}
+            </Campo>
+            <Campo etiqueta="Descripción">
+              {(p) => <textarea {...p} className="textarea" value={descripcion} onChange={(e) => setDescripcion(e.target.value)} required />}
+            </Campo>
+          </div>
+        </Dialogo>
       ) : null}
     </div>
   );
-}
-
-interface AccionProps {
-  expediente: ExpedienteVista;
-  base: string;
-  cerrado: boolean;
-  ocupado: boolean;
-  onEnviar: (ruta: string, cuerpo: unknown) => Promise<void>;
 }
