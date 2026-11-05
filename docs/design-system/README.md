@@ -1,6 +1,6 @@
 # Design system — Historiales clínicos
 
-> Estado: **pendiente de aprobación** (OpenSpec `fase-1-design-system`, tarea 3.3).
+> Estado: **aprobado el 2026-11-05** (OpenSpec `fase-1-design-system`, archivado en `openspec/specs/design-system`).
 > Código: [`apps/web/src/styles.css`](../../apps/web/src/styles.css) (tokens + componentes) ·
 > [`apps/web/src/ui.tsx`](../../apps/web/src/ui.tsx) (primitivas) ·
 > [`apps/web/src/Grafica.tsx`](../../apps/web/src/Grafica.tsx)

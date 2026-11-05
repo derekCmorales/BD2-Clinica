@@ -69,6 +69,7 @@ scripts/           migrate, seed, verificar, mermaid
 
 Cada fase hasta la entrega final es un change abierto en [`openspec/changes/`](openspec/changes/).
 Las tareas marcadas `[DECISIÓN]` esperan una decisión de modelado del estudiante.
+Checklist de cierre: [`docs/CHECKLIST-ENTREGA.md`](docs/CHECKLIST-ENTREGA.md) · prompt del agente de cierre: [`openspec/GOAL-CIERRE.md`](openspec/GOAL-CIERRE.md).
 
 ```bash
 npx @fission-ai/openspec@1.16.0 list       # progreso por fase
@@ -77,8 +78,8 @@ npx @fission-ai/openspec@1.16.0 validate --all
 
 | Fase | Change | Estado |
 |---|---|---|
-| 1 | `fase-1-design-system` | Implementado · pendiente de aprobación |
-| 2 | `fase-2-pantallas-clinicas` | Implementado · pendiente de aprobación |
+| 1 | `fase-1-design-system` | Aprobado y archivado |
+| 2 | `fase-2-pantallas-clinicas` | Aprobado y archivado |
 | 3 | `fase-3-seguridad-visible` | UI hecha · bitácora pendiente de decisión |
 | 4 | `fase-4-contrato-adaptadores` | Pendiente |
 | 5 | `fase-5-proyector-read-model` | Pendiente de decisión |

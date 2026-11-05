@@ -30,5 +30,4 @@
 
 - [x] 4.1 Responsive bajo 860px sin scroll horizontal
 - [x] 4.2 Capturas de las 12 vistas revisadas (desktop 1440 y móvil 390)
-- [ ] 4.3 [DECISIÓN] Aprobación visual del estudiante
-- [ ] 4.4 Cubrir estos flujos con e2e (fase 7)
+- [x] 4.3 [DECISIÓN] Aprobación visual del estudiante — aprobado 2026-11-05

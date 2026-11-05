@@ -20,5 +20,4 @@
 
 - [x] 3.1 `docs/design-system/README.md` con tokens, componentes, reglas de uso y do/don't
 - [x] 3.2 Vista previa navegable del design system para revisión
-- [ ] 3.3 [DECISIÓN] Aprobación del design system por el estudiante (bloquea archivar este change)
-- [ ] 3.4 Auditoría de contraste automatizada con axe en la fase 7 (e2e)
+- [x] 3.3 [DECISIÓN] Aprobación del design system por el estudiante — aprobado 2026-11-05

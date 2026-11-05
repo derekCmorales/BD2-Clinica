@@ -17,7 +17,8 @@
 
 ## 3. Calidad
 
-- [ ] 3.1 axe en ingreso, censo, cada pestaña y cada diálogo
+- [ ] 3.1 axe en ingreso, censo, cada pestaña y cada diálogo (incluye contraste; heredado de fase-1 3.4)
+- [ ] 3.3 Cubrir los flujos de la fase 2 (heredado de fase-2 4.4)
 - [ ] 3.2 Capturas de evidencia a `docs/entrega-2/capturas/`
 
 ## 4. CI
