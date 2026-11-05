@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Entrega I — Modelo relacional · Historiales clínicos</title>
+  <style>
+    :root {
+      --ink: #1a2332;
+      --muted: #5a6b7d;
+      --line: #d0d7de;
+      --bg: #ffffff;
+      --soft: #f6f8fa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto;
+      max-width: 52rem;
+      padding: 2rem 1.5rem 4rem;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.55;
+      font-size: 11pt;
+    }
+    .cover {
+      text-align: center;
+      padding: 3rem 1rem 2.5rem;
+      border-bottom: 2px solid var(--ink);
+      margin-bottom: 2.5rem;
+      page-break-after: always;
+    }
+    .cover .uni { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem; color: var(--muted); }
+    .cover h1 { font-size: 1.75rem; margin: 1rem 0 0.5rem; }
+    .cover .meta { color: var(--muted); margin: 0.25rem 0; }
+    .howto {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      padding: 0.85rem 1rem;
+      margin-bottom: 2rem;
+      font-size: 0.9rem;
+    }
+    h1 { font-size: 1.45rem; margin-top: 0; }
+    h2 { font-size: 1.2rem; border-bottom: 1px solid var(--line); padding-bottom: 0.25rem; margin-top: 1.75rem; }
+    h3 { font-size: 1.05rem; margin-top: 1.25rem; }
+    section.doc-section {
+      margin-bottom: 2.5rem;
+      page-break-inside: avoid;
+    }
+    section.doc-section + section.doc-section {
+      border-top: 1px solid var(--line);
+      padding-top: 1.5rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0 1.25rem;
+      font-size: 0.92rem;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 0.4rem 0.55rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--soft); }
+    code {
+      font-family: ui-monospace, "SF Mono", Consolas, monospace;
+      font-size: 0.88em;
+      background: var(--soft);
+      padding: 0.05em 0.3em;
+      border-radius: 3px;
+    }
+    pre {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      padding: 0.75rem 1rem;
+      overflow-x: auto;
+      font-size: 0.85rem;
+    }
+    pre code { background: none; padding: 0; }
+    figure.diagram {
+      margin: 1.25rem 0;
+      text-align: center;
+      page-break-inside: avoid;
+    }
+    figure.diagram img {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    figcaption {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+    }
+    ul, ol { padding-left: 1.35rem; }
+    a { color: #0b5fff; }
+    @media print {
+      body { max-width: none; padding: 0; font-size: 10pt; }
+      .howto { display: none; }
+      .cover { border-bottom-width: 1px; }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="cover">
+    <p class="uni">Universidad Rafael Landívar</p>
+    <p class="uni">Facultad de Ingeniería · Ingeniería en Informática y Sistemas</p>
+    <p class="uni">Bases de Datos II</p>
+    <h1>Entrega I — Modelo relacional</h1>
+    <p class="meta">Plataforma de historiales clínicos · Red de cuatro instituciones</p>
+    <p class="meta">Hospital (PostgreSQL) · Odontología (MySQL) · Laboratorio (MongoDB) · Pediátrico (Redis)</p>
+  </header>
+
+  <aside class="howto">
+    <strong>Cómo armar el documento:</strong> abre este archivo en el navegador →
+    Cmd+A → Cmd+C → pega en Word o Google Docs. Los diagramas ya van como imagen.
+  </aside>
+
+  <section class="doc-section" id="00-contexto">
+<h1>Contexto: red de instituciones y motores</h1>
+<figure class="diagram"><img src="render/00-contexto-1.png" alt="Diagrama 00-contexto-1" /><figcaption>00-contexto-1</figcaption></figure>
+<table><thead><tr><th>Institución</th><th>Motor</th><th>Entrega I</th></tr></thead><tbody><tr><td>Hospital general</td><td>PostgreSQL</td><td>ER + DDL 3NF</td></tr><tr><td>Clínica odontológica</td><td>MySQL</td><td>ER + DDL 3NF + odontograma</td></tr><tr><td>Laboratorio clínico</td><td>MongoDB</td><td>Análisis completo (entidades, atributos, ops)</td></tr><tr><td>Centro pediátrico</td><td>Redis</td><td>Análisis completo (entidades, atributos, ops)</td></tr></tbody></table>
+<p>Cada institución es dueña de su infraestructura. Un mismo motor no se repite.</p>
+</section>
+
+<section class="doc-section" id="00-hexagonal">
+<h1>Arquitectura hexagonal (contexto, no se evalúa)</h1>
+<figure class="diagram"><img src="render/00-hexagonal-1.png" alt="Diagrama 00-hexagonal-1" /><figcaption>00-hexagonal-1</figcaption></figure>
+<p>Regla: <code>dominio/</code> no importa NestJS ni drivers. Los casos de uso no tienen <code>if</code> por motor. El JWT (Entrega II) lleva <code>institucionId</code> y un provider de request scope elige el adaptador.</p>
+</section>
+
+<section class="doc-section" id="01-dominio-conceptual">
+<h1>Dominio conceptual — núcleo compartido</h1>
+<p>Levantamiento común a las cuatro instituciones. Las extensiones (odontograma, resultado de examen, curva/vacunas) se documentan en cada institución.</p>
+<figure class="diagram"><img src="render/01-dominio-conceptual-1.png" alt="Diagrama 01-dominio-conceptual-1" /><figcaption>01-dominio-conceptual-1</figcaption></figure>
+<p>Cardinalidades:</p>
+<table><thead><tr><th>Relación</th><th>Tipo</th></tr></thead><tbody><tr><td>Paciente–Expediente</td><td>1:1 (por institución / motor)</td></tr><tr><td>Expediente–Cita</td><td>1:N</td></tr><tr><td>Expediente–Consulta</td><td>1:N</td></tr><tr><td>Cita–Consulta</td><td>0..1 : 0..1 (conectadas; una cita puede no concretarse)</td></tr><tr><td>Consulta–Diagnóstico</td><td>1:N</td></tr><tr><td>Consulta–Receta</td><td>1:N</td></tr></tbody></table>
+<p>Extensiones (documentadas en sus secciones):</p>
+<ul><li>Odontología: Expediente 1:N PiezaDental; Pieza 1:N ProcedimientoDental</li><li>Laboratorio: Expediente 1:N ResultadoExamen (referenciado; forma según TipoExamen)</li><li>Pediatría: Expediente 1:N MedicionCrecimiento; Expediente 1:N DosisVacuna</li></ul>
+</section>
+
+<section class="doc-section" id="02-entidades-atributos">
+<h1>Entidades y atributos identificados</h1>
+<p>Levantamiento completo del historial clínico para las <strong>cuatro</strong> instituciones. El núcleo es compartido; cada institución añade extensiones.</p>
+<h2>Núcleo compartido (todas las instituciones)</h2>
+<h3>Usuario</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Notas</th></tr></thead><tbody><tr><td>id</td><td>UUID / string</td><td>PK</td></tr><tr><td>nombre</td><td>texto</td><td></td></tr><tr><td>correo</td><td>texto</td><td>único</td></tr><tr><td>rol</td><td>enum</td><td>médico, secretaria/enfermería/laboratorista, admin</td></tr><tr><td>especialidad</td><td>texto</td><td>nullable</td></tr><tr><td>activo</td><td>booleano</td><td></td></tr><tr><td>creado_en</td><td>timestamp</td><td></td></tr></tbody></table>
+<h3>Paciente</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Clasificación</th></tr></thead><tbody><tr><td>id</td><td>identificador</td><td>—</td></tr><tr><td>dpi</td><td>texto nullable</td><td>confidencial</td></tr><tr><td>nombres, apellidos</td><td>texto</td><td>confidencial (*restringido* si menor)</td></tr><tr><td>fecha_nacimiento</td><td>fecha</td><td>confidencial / restringido si menor</td></tr><tr><td>sexo</td><td>enum</td><td>confidencial / restringido si menor</td></tr><tr><td>telefono, dirección, correo</td><td>texto</td><td>confidencial</td></tr><tr><td>codigo_referencia</td><td>texto nullable</td><td>confidencial — referidos (laboratorio)</td></tr></tbody></table>
+<h3>Expediente</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Notas</th></tr></thead><tbody><tr><td>id</td><td>identificador</td><td>PK</td></tr><tr><td>paciente_id</td><td>ref</td><td>UNIQUE → 1:1 por institución</td></tr><tr><td>estado</td><td>activo \</td><td>archivado</td><td>no se borra</td></tr><tr><td>motivo_archivo</td><td>texto</td><td>nullable</td></tr><tr><td>archivado_en</td><td>timestamp</td><td>nullable</td></tr><tr><td>version</td><td>entero</td><td>concurrencia optimista</td></tr></tbody></table>
+<h3>Cita</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Notas</th></tr></thead><tbody><tr><td>id</td><td>identificador</td><td></td></tr><tr><td>expediente_id, medico_id</td><td>ref</td><td></td></tr><tr><td>inicio, fin</td><td>timestamp</td><td>fin &gt; inicio</td></tr><tr><td>estado</td><td>programada / atendida / cancelada / inasistencia</td><td></td></tr><tr><td>motivo</td><td>texto</td><td></td></tr><tr><td>consulta_id</td><td>ref nullable</td><td>enlace a consulta ocurrida</td></tr></tbody></table>
+<h3>Consulta</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Clasificación</th></tr></thead><tbody><tr><td>id</td><td>identificador</td><td></td></tr><tr><td>expediente_id, medico_id</td><td>ref</td><td></td></tr><tr><td>cita_id</td><td>ref nullable único</td><td></td></tr><tr><td>ocurrida_en</td><td>timestamp</td><td></td></tr><tr><td>motivo</td><td>texto</td><td>restringido</td></tr><tr><td>notas</td><td>texto</td><td>restringido</td></tr></tbody></table>
+<h3>Diagnostico (híbrido)</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Clasificación</th></tr></thead><tbody><tr><td>id</td><td>identificador</td><td></td></tr><tr><td>consulta_id</td><td>ref</td><td></td></tr><tr><td>catalogo_diagnostico_id</td><td>ref nullable</td><td></td></tr><tr><td>texto_libre</td><td>texto</td><td>restringido (obligatorio)</td></tr><tr><td>es_principal</td><td>booleano</td><td></td></tr></tbody></table>
+<h3>Receta (híbrido)</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Clasificación</th></tr></thead><tbody><tr><td>id</td><td>identificador</td><td></td></tr><tr><td>consulta_id</td><td>ref</td><td></td></tr><tr><td>catalogo_medicamento_id</td><td>ref nullable</td><td></td></tr><tr><td>texto_libre, dosis, frecuencia</td><td>texto</td><td>restringido</td></tr><tr><td>duracion_dias</td><td>entero</td><td></td></tr></tbody></table>
+<h3>CatalogoDiagnostico / CatalogoMedicamento</h3>
+<p>Códigos y descripciones de referencia (subconjunto sintético).</p>
+<h3>AuditoriaAcceso</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Notas</th></tr></thead><tbody><tr><td>id</td><td>identificador</td><td></td></tr><tr><td>actor_id, paciente_id</td><td>ref</td><td></td></tr><tr><td>accion, recurso</td><td>texto</td><td>quién / qué</td></tr><tr><td>ocurrido_en</td><td>timestamp</td><td>cuándo</td></tr><tr><td>detalle</td><td>texto</td><td>sin volcar datos clínicos a logs</td></tr></tbody></table>
+<p>---</p>
+<h2>Extensión — Clínica odontológica</h2>
+<h3>PiezaDental</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Notas</th></tr></thead><tbody><tr><td>id</td><td>identificador</td><td></td></tr><tr><td>expediente_id</td><td>ref</td><td></td></tr><tr><td>codigo_fdi</td><td>entero 11–48</td><td>UNIQUE con expediente</td></tr><tr><td>estado</td><td>enum</td><td>sano, caries, obturado, corona, ausente, …</td></tr><tr><td>notas</td><td>texto</td><td></td></tr><tr><td>actualizado_en</td><td>timestamp</td><td></td></tr></tbody></table>
+<h3>ProcedimientoDental</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Clasificación</th></tr></thead><tbody><tr><td>id</td><td>identificador</td><td></td></tr><tr><td>pieza_dental_id</td><td>ref</td><td></td></tr><tr><td>consulta_id</td><td>ref</td><td></td></tr><tr><td>tipo</td><td>texto</td><td></td></tr><tr><td>descripcion</td><td>texto</td><td>restringido</td></tr><tr><td>realizado_en</td><td>timestamp</td><td></td></tr></tbody></table>
+<p>Detalle ER: documento de odontología.</p>
+<p>---</p>
+<h2>Extensión — Laboratorio clínico</h2>
+<h3>TipoExamen</h3>
+<p>codigo, nombre, categoria (hematologia / orina / cultivo / otro), campos_esperados.</p>
+<h3>ResultadoExamen</h3>
+<p>pacienteId (referencia), tipoExamen, fecha, estado, valores (estructura <strong>variable</strong> según tipo), observaciones, version.</p>
+<p>Detalle completo: documento de laboratorio.</p>
+<p>---</p>
+<h2>Extensión — Centro pediátrico</h2>
+<h3>Paciente (menor) — atributos adicionales</h3>
+<p>tutor_nombre, tutor_telefono, tutor_dpi, alergias_conocidas. Identidad del menor = <strong>restringido</strong>.</p>
+<h3>MedicionCrecimiento</h3>
+<p>fecha, peso_kg, talla_cm, perimetro_cefalico_cm, percentil_peso, percentil_talla.</p>
+<h3>TipoVacuna / DosisVacuna</h3>
+<p>código de vacuna, número de dosis, aplicada_en, proxima_en, lote.</p>
+<p>Detalle completo: documento de pediatría.</p>
+<p>---</p>
+<h2>Mapa institución → entidades propias</h2>
+<table><thead><tr><th>Institución</th><th>Motor</th><th>Extensiones</th></tr></thead><tbody><tr><td>Hospital general</td><td>PostgreSQL</td><td>Núcleo completo (citas, diagnósticos, recetas)</td></tr><tr><td>Clínica odontológica</td><td>MySQL</td><td>PiezaDental, ProcedimientoDental</td></tr><tr><td>Laboratorio clínico</td><td>MongoDB</td><td>TipoExamen, ResultadoExamen</td></tr><tr><td>Centro pediátrico</td><td>Redis</td><td>MedicionCrecimiento, TipoVacuna, DosisVacuna, tutor</td></tr></tbody></table>
+</section>
+
+<section class="doc-section" id="03-clasificacion">
+<h1>Clasificación de información</h1>
+<p>Tres niveles, aplicables a las <strong>cuatro</strong> instituciones.</p>
+<figure class="diagram"><img src="render/03-clasificacion-1.png" alt="Diagrama 03-clasificacion-1" /><figcaption>03-clasificacion-1</figcaption></figure>
+<h2>Matriz por institución</h2>
+<table><thead><tr><th>Dato / institución</th><th>Hospital</th><th>Odontología</th><th>Laboratorio</th><th>Pediátrico</th></tr></thead><tbody><tr><td>Nombre institución, horarios</td><td>Público</td><td>Público</td><td>Público</td><td>Público</td></tr><tr><td>Identidad paciente adulto</td><td>Confidencial</td><td>Confidencial</td><td>Confidencial</td><td>—</td></tr><tr><td>Identidad menor + tutor</td><td>—</td><td>—</td><td>—</td><td>Restringido / Confidencial (tutor)</td></tr><tr><td>Diagnóstico / notas / receta</td><td>Restringido</td><td>Restringido</td><td>Secundario</td><td>Restringido</td></tr><tr><td>Resultado de examen</td><td>—</td><td>—</td><td>Restringido</td><td>—</td></tr><tr><td>Odontograma</td><td>—</td><td>Restringido</td><td>—</td><td>—</td></tr><tr><td>Crecimiento / vacunas</td><td>—</td><td>—</td><td>—</td><td>Restringido</td></tr></tbody></table>
+<h2>Reglas transversales</h2>
+<ol><li>Ningún dato <strong>restringido</strong> en logs de aplicación — ni en desarrollo.</li><li>Todo acceso a restringido genera entrada de auditoría (quién, qué, cuándo).</li><li>Usuarios de BD con privilegios mínimos (<code>hospital_app</code>, <code>odontologia_app</code>; equivalentes en Mongo/Redis en Entrega II).</li><li>Seeds <strong>sintéticos</strong> únicamente. Jamás datos clínicos reales.</li><li>En pediatría el expediente completo del menor se trata como restringido por edad.</li></ol>
+<h2>Sensibilidad alta (subconjunto de restringido)</h2>
+<p>Marcar en catálogo o metadatos cuando aplique: VIH, salud mental, ITS, genética. El acceso debe auditarse igual; la UI futura puede exigir confirmación adicional (fuera del alcance de Entrega I).</p>
+</section>
+
+<section class="doc-section" id="04-hospital">
+<h1>Hospital general — PostgreSQL</h1>
+<h2>Modelo entidad-relación</h2>
+<figure class="diagram"><img src="render/04-hospital-1.png" alt="Diagrama 04-hospital-1" /><figcaption>04-hospital-1</figcaption></figure>
+<h2>Modelo relacional (físico Entrega I)</h2>
+<p>Schema <code>clinico</code> en la base <code>hospital</code>:</p>
+<ul><li><code>usuario</code>, <code>paciente</code>, <code>expediente</code></li><li><code>cita</code>, <code>consulta</code> (FK cruzadas opcionales)</li><li><code>catalogo_diagnostico</code>, <code>catalogo_medicamento</code></li><li><code>diagnostico</code>, <code>receta</code></li><li><code>auditoria_acceso</code></li></ul>
+<p>DDL: <code>apps/api/src/infraestructura/postgres/migrations/001_clinico.sql</code></p>
+<h2>Decisión diferida: Event Sourcing</h2>
+<p>En Entrega II el Hospital migrará a event store + read model (el expediente se <strong>enmienda</strong>, no se UPDATE). Entrega I entrega el historial en 3NF para cumplir el enunciado de modelo relacional normalizado.</p>
+</section>
+
+<section class="doc-section" id="05-odontologia">
+<h1>Clínica odontológica — MySQL</h1>
+<h2>Modelo entidad-relación</h2>
+<figure class="diagram"><img src="render/05-odontologia-1.png" alt="Diagrama 05-odontologia-1" /><figcaption>05-odontologia-1</figcaption></figure>
+<h2>Odontograma</h2>
+<p>32 filas por expediente (códigos FDI 11–48). <strong>Descartado:</strong> JSON (rompe 1NF en un entregable de normalización) y 32 columnas (sin historial).</p>
+<p>Cada intervención queda en <code>procedimiento_dental</code> ligada a la pieza y a la consulta.</p>
+<h2>Modelo relacional</h2>
+<p>Tablas InnoDB <code>utf8mb4</code> en base <code>odontologia</code>. Sin Event Sourcing: simplicidad deliberada (hallazgo comparativo).</p>
+<p>DDL: <code>apps/api/src/infraestructura/mysql/migrations/001_clinico.sql</code></p>
+<h2>Solapamiento de citas</h2>
+<p>MySQL no tiene exclusion constraint como PostgreSQL <code>btree_gist</code>. En Entrega II el equivalente operativo es <code>SELECT … FOR UPDATE</code> dentro de transacción <code>REPEATABLE READ</code>. Documentado; no se finge una constraint de tabla.</p>
+</section>
+
+<section class="doc-section" id="06-laboratorio-preview">
+<h1>Laboratorio clínico — análisis de información (MongoDB)</h1>
+<p>El laboratorio <strong>no</strong> se modela en tablas relacionales en esta entrega (evitar EAV). Sí se levanta el mismo rigor de entidades, atributos, clasificación y operaciones que Hospital y Odontología, porque el enunciado exige cubrir las cuatro instituciones.</p>
+<p>Motor asignado (decisión de proyecto): <strong>MongoDB</strong>. La implementación documental completa es Entrega II; aquí queda el análisis listo para esa implementación.</p>
+<h2>Por qué no es relacional</h2>
+<p>Una hematología, un examen de orina y un cultivo tienen <strong>estructuras distintas</strong>. Forzarlas a un esquema SQL fijo lleva a:</p>
+<ul><li>columnas nullable por tipo de examen, o</li><li>EAV (<code>examen_id</code>, <code>campo</code>, <code>valor</code>) — la anti-solución: sin tipado, consultas lentas, validación imposible.</li></ul>
+<p>MongoDB encaja porque el resultado es un documento cuya forma depende del <code>tipoExamen</code>, con validación por schema (sin esquema ≠ sin validación).</p>
+<h2>Modelo conceptual</h2>
+<figure class="diagram"><img src="render/06-laboratorio-preview-1.png" alt="Diagrama 06-laboratorio-preview-1" /><figcaption>06-laboratorio-preview-1</figcaption></figure>
+<h2>Relación con el núcleo compartido</h2>
+<table><thead><tr><th>Núcleo</th><th>En laboratorio</th></tr></thead><tbody><tr><td>Paciente, Expediente, Usuario, Auditoría</td><td>Igual significado</td></tr><tr><td>Consulta / Diagnóstico / Receta</td><td>Opcionales o secundarios: el flujo principal es el <strong>resultado de examen</strong></td></tr><tr><td>Cita</td><td>Puede existir para toma de muestra; no es el núcleo del valor clínico</td></tr></tbody></table>
+<h2>Entidades y atributos</h2>
+<h3>Paciente / Expediente / Usuario / AuditoriaAcceso</h3>
+<p>Mismos atributos lógicos del núcleo (ver documento de entidades). En laboratorio el paciente puede no tener DPI si es referido con código externo — atributo opcional <code>codigo_referencia</code>.</p>
+<h3>TipoExamen (catálogo)</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Clasificación</th><th>Notas</th></tr></thead><tbody><tr><td>codigo</td><td>texto</td><td>público</td><td>ej. <code>HEM_COMP</code>, <code>ORO_GRAL</code>, <code>CUL_URI</code></td></tr><tr><td>nombre</td><td>texto</td><td>público</td><td></td></tr><tr><td>categoria</td><td>enum</td><td>público</td><td>hematologia / orina / cultivo / otro</td></tr><tr><td>descripcion</td><td>texto</td><td>público</td><td></td></tr><tr><td>campos_esperados</td><td>lista de nombres</td><td>público</td><td>guía de validación; no son valores clínicos</td></tr></tbody></table>
+<h3>ResultadoExamen</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Clasificación</th><th>Notas</th></tr></thead><tbody><tr><td>id</td><td>identificador</td><td>—</td><td></td></tr><tr><td>pacienteId</td><td>referencia</td><td>—</td><td><strong>no</strong> embeber el paciente</td></tr><tr><td>expedienteId</td><td>referencia</td><td>—</td><td></td></tr><tr><td>tipoExamen</td><td>texto / ref</td><td>público</td><td>determina la forma de <code>valores</code></td></tr><tr><td>fecha</td><td>timestamp</td><td>confidencial</td><td>fecha de toma / reporte</td></tr><tr><td>estado</td><td>enum</td><td>confidencial</td><td>pendiente / validado / anulado</td></tr><tr><td>solicitanteId</td><td>ref usuario</td><td>confidencial</td><td>médico que pidió</td></tr><tr><td>validadorId</td><td>ref usuario</td><td>confidencial</td><td>laboratorista</td></tr><tr><td>valores</td><td>estructura variable</td><td><strong>restringido</strong></td><td>ver abajo</td></tr><tr><td>observaciones</td><td>texto</td><td>restringido</td><td></td></tr><tr><td>version</td><td>entero</td><td>—</td><td>concurrencia optimista</td></tr></tbody></table>
+<h3>Forma de <code>valores</code> según tipo (ejemplos sintéticos)</h3>
+<p><strong>Hematología completa</strong></p>
+<table><thead><tr><th>Campo</th><th>Tipo</th></tr></thead><tbody><tr><td>eritrocitos</td><td>número</td></tr><tr><td>hemoglobina</td><td>número</td></tr><tr><td>hematocrito</td><td>número</td></tr><tr><td>leucocitos</td><td>número</td></tr><tr><td>plaquetas</td><td>número</td></tr><tr><td>unidades</td><td>texto</td></tr></tbody></table>
+<p><strong>Orina general</strong></p>
+<table><thead><tr><th>Campo</th><th>Tipo</th></tr></thead><tbody><tr><td>color</td><td>texto</td></tr><tr><td>aspecto</td><td>texto</td></tr><tr><td>densidad</td><td>número</td></tr><tr><td>ph</td><td>número</td></tr><tr><td>proteinas</td><td>texto / enum</td></tr><tr><td>glucosa</td><td>texto / enum</td></tr></tbody></table>
+<p><strong>Cultivo</strong></p>
+<table><thead><tr><th>Campo</th><th>Tipo</th></tr></thead><tbody><tr><td>muestra</td><td>texto</td></tr><tr><td>microorganismo</td><td>texto</td></tr><tr><td>sensible_a</td><td>lista de textos</td></tr><tr><td>resistente_a</td><td>lista de textos</td></tr><tr><td>tiempo_incubacion_h</td><td>entero</td></tr></tbody></table>
+<h2>Embeber vs referenciar (decisión de modelado documental)</h2>
+<figure class="diagram"><img src="render/06-laboratorio-preview-2.png" alt="Diagrama 06-laboratorio-preview-2" /><figcaption>06-laboratorio-preview-2</figcaption></figure>
+<p><strong>Decisión:</strong> exámenes <strong>referenciados</strong>, no embebidos dentro del paciente.</p>
+<p>Razones:</p>
+<ol><li>Un paciente acumula cientos de exámenes a lo largo del tiempo.</li><li>Embeber choca con el límite práctico de 16 MB por documento BSON.</li><li>Casi nunca se necesitan “todos los exámenes + ficha” en la misma lectura.</li></ol>
+<p><strong>Descartado:</strong> un solo documento paciente con arreglo <code>examenes[]</code> embebido.</p>
+<h2>Índices y consistencia (anticipación Entrega II)</h2>
+<ul><li>Índice mínimo: <code>{ pacienteId: 1, fecha: -1 }</code>.</li><li>Concurrencia: <code>replaceOne</code> filtrando por <code>id</code> + <code>version</code>.</li><li>Transacciones multi-documento requieren replica set (ya previsto en Compose).</li></ul>
+<h2>Clasificación específica</h2>
+<table><thead><tr><th>Dato</th><th>Nivel</th></tr></thead><tbody><tr><td>Nombre del laboratorio, menú de exámenes</td><td>Público</td></tr><tr><td>Identidad del paciente, fecha de toma</td><td>Confidencial</td></tr><tr><td>Todos los <code>valores</code>, cultivos, marcadores sensibles</td><td>Restringido</td></tr><tr><td>Resultados asociados a VIH / ITS / genética</td><td>Restringido (sensibilidad alta)</td></tr></tbody></table>
+<h2>Operaciones propias del laboratorio</h2>
+<ol><li>Registrar solicitud / resultado de examen (estructura según tipo).</li><li>Validar o anular un resultado.</li><li>Consultar historial de exámenes de un paciente (paginado por fecha).</li><li>Abrir un resultado concreto (dispara auditoría).</li><li>Archivar expediente del paciente referido.</li></ol>
+</section>
+
+<section class="doc-section" id="07-pediatrico-preview">
+<h1>Centro médico pediátrico — análisis de información (Redis)</h1>
+<p>El centro pediátrico comparte el núcleo del historial clínico, con dos extensiones propias del dominio: <strong>curva de crecimiento</strong> y <strong>esquema de vacunación</strong>. Las consultas son frecuentes, cortas y casi siempre por identificador de paciente conocido.</p>
+<p>Motor asignado (decisión de proyecto): <strong>Redis como sistema de registro</strong> (no caché). El enunciado del curso menciona Firebase; este proyecto lo sustituye por Redis — pendiente de autorización del catedrático. Si se rechaza, Firebase vuelve y Redis queda solo como caché (cambio de un adaptador).</p>
+<h2>Por qué Redis (y no un SQL más)</h2>
+<table><thead><tr><th>Necesidad del dominio</th><th>Encaje</th></tr></thead><tbody><tr><td>Acceso siempre por clave conocida (<code>paciente:{id}</code>)</td><td>RedisJSON / hash</td></tr><tr><td>Mediciones ordenadas en el tiempo</td><td>Sorted set (score = timestamp)</td></tr><tr><td>Vacunas pendientes / vencidas “hoy”</td><td>Sorted set (score = fecha próxima dosis)</td></tr><tr><td>Escrituras atómicas read-modify-write</td><td>Script Lua</td></tr></tbody></table>
+<p><strong>Limitación consciente:</strong> consultas ad-hoc del tipo “todos los niños con percentil de peso &amp;lt; 3” no son naturales sin índice auxiliar o RediSearch. Se documenta; no se finge que Redis sea un warehouse analítico.</p>
+<h2>Persistencia (trade-off obligatorio)</h2>
+<p>Redis de registro usa AOF (<code>appendfsync everysec</code>) + RDB. Ante un crash se puede perder <strong>hasta ~1 segundo</strong> de escrituras. Eso es aceptable para un historial de control pediátrico ambulatorio en este alcance académico, y debe quedar explícito.</p>
+<p>La <strong>caché</strong> transversal de la plataforma vive en <strong>otra instancia</strong> Redis (sin AOF), para no persistir datos volátiles.</p>
+<h2>Modelo conceptual</h2>
+<figure class="diagram"><img src="render/07-pediatrico-preview-1.png" alt="Diagrama 07-pediatrico-preview-1" /><figcaption>07-pediatrico-preview-1</figcaption></figure>
+<h2>Vista de almacenamiento (anticipación Entrega II)</h2>
+<figure class="diagram"><img src="render/07-pediatrico-preview-2.png" alt="Diagrama 07-pediatrico-preview-2" /><figcaption>07-pediatrico-preview-2</figcaption></figure>
+<p>Esto <strong>no</strong> es el entregable relacional; es el mapa mental de cómo el análisis se materializará después.</p>
+<h2>Entidades y atributos</h2>
+<h3>Paciente (menor)</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Clasificación</th><th>Notas</th></tr></thead><tbody><tr><td>id</td><td>identificador</td><td>—</td><td></td></tr><tr><td>nombres, apellidos</td><td>texto</td><td><strong>restringido</strong></td><td>menor de edad</td></tr><tr><td>fecha_nacimiento</td><td>fecha</td><td>restringido</td><td>define edad / percentil</td></tr><tr><td>sexo</td><td>enum</td><td>restringido</td><td></td></tr><tr><td>dpi_menor</td><td>texto nullable</td><td>restringido</td><td>a menudo ausente</td></tr><tr><td>tutor_nombre</td><td>texto</td><td>confidencial</td><td>responsable</td></tr><tr><td>tutor_telefono</td><td>texto</td><td>confidencial</td><td></td></tr><tr><td>tutor_dpi</td><td>texto</td><td>confidencial</td><td></td></tr><tr><td>alergias_conocidas</td><td>texto</td><td>restringido</td><td></td></tr><tr><td>creado_en</td><td>timestamp</td><td>—</td><td></td></tr></tbody></table>
+<h3>Expediente</h3>
+<p>Igual que el núcleo: <code>estado</code> (activo/archivado), <code>motivo_archivo</code>, <code>version</code>. En pediatría archivar puede significar traslado a medicina de adultos u otra institución.</p>
+<h3>MedicionCrecimiento</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Clasificación</th><th>Notas</th></tr></thead><tbody><tr><td>pacienteId</td><td>ref</td><td>—</td><td></td></tr><tr><td>fecha</td><td>timestamp</td><td>restringido</td><td>score del ZSET</td></tr><tr><td>peso_kg</td><td>número</td><td>restringido</td><td></td></tr><tr><td>talla_cm</td><td>número</td><td>restringido</td><td></td></tr><tr><td>perimetro_cefalico_cm</td><td>número nullable</td><td>restringido</td><td>sobre todo lactantes</td></tr><tr><td>percentil_peso</td><td>número nullable</td><td>restringido</td><td></td></tr><tr><td>percentil_talla</td><td>número nullable</td><td>restringido</td><td></td></tr><tr><td>registrado_por</td><td>ref usuario</td><td>confidencial</td><td></td></tr></tbody></table>
+<h3>TipoVacuna (catálogo)</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Clasificación</th></tr></thead><tbody><tr><td>codigo</td><td>texto</td><td>público</td></tr><tr><td>nombre</td><td>texto</td><td>público</td></tr><tr><td>dosis_totales_esquema</td><td>entero</td><td>público</td></tr><tr><td>intervalo_dias_tipico</td><td>entero</td><td>público</td></tr></tbody></table>
+<h3>DosisVacuna</h3>
+<table><thead><tr><th>Atributo</th><th>Tipo lógico</th><th>Clasificación</th><th>Notas</th></tr></thead><tbody><tr><td>pacienteId</td><td>ref</td><td>—</td><td></td></tr><tr><td>vacunaCodigo</td><td>texto</td><td>restringido</td><td></td></tr><tr><td>numero_dosis</td><td>entero</td><td>restringido</td><td>1..N del esquema</td></tr><tr><td>aplicada_en</td><td>fecha nullable</td><td>restringido</td><td>null = aún no aplicada</td></tr><tr><td>proxima_en</td><td>fecha</td><td>restringido</td><td>score en <code>vacunas:pendientes</code></td></tr><tr><td>lote</td><td>texto nullable</td><td>confidencial</td><td></td></tr><tr><td>aplicada_por</td><td>ref usuario</td><td>confidencial</td><td></td></tr></tbody></table>
+<h3>Consulta / Diagnóstico / Receta / Auditoría</h3>
+<p>Mismo significado del núcleo. Toda lectura de expediente pediátrico genera auditoría porque el sujeto es menor.</p>
+<h2>Clasificación específica (crítico)</h2>
+<p>En pediatría el umbral sube: <strong>casi todo el expediente es restringido</strong> por tratarse de un menor, no solo diagnósticos o vacunas.</p>
+<table><thead><tr><th>Dato</th><th>Nivel</th></tr></thead><tbody><tr><td>Nombre del centro, horarios, catálogo de vacunas</td><td>Público</td></tr><tr><td>Datos del tutor (teléfono, DPI)</td><td>Confidencial</td></tr><tr><td>Identidad del menor, mediciones, vacunas, consultas, alergias</td><td><strong>Restringido</strong></td></tr></tbody></table>
+<h2>Operaciones propias de pediatría</h2>
+<ol><li>Registrar paciente menor + tutor (nuevo ingreso).</li><li>Registrar medición de crecimiento (actualiza curva).</li><li>Registrar dosis de vacuna aplicada y programar próxima.</li><li>Listar vacunas pendientes / vencidas a una fecha (consulta por rango de score).</li><li>Consultar curva de crecimiento de un paciente.</li><li>Abrir expediente (siempre con auditoría).</li><li>Archivar expediente (traslado / egreso).</li></ol>
+<h2>Atomicidad</h2>
+<p>Cualquier operación que toque expediente JSON + ZSET de curva/vacunas debe ser atómica (script Lua en Entrega II). Sin eso hay riesgo de curva desfasada respecto al documento.</p>
+</section>
+
+<section class="doc-section" id="08-operaciones">
+<h1>Operaciones de la aplicación (lenguaje sencillo)</h1>
+<p>Lista de lo que la aplicación necesita hacer sobre los datos. <strong>Sin SQL, sin endpoints, sin drivers.</strong> Es el contrato de comportamiento que Entrega II implementará en los cuatro motores.</p>
+<figure class="diagram"><img src="render/08-operaciones-1.png" alt="Diagrama 08-operaciones-1" /><figcaption>08-operaciones-1</figcaption></figure>
+<h2>Núcleo (las cuatro instituciones)</h2>
+<ol><li><strong>Registrar paciente de nuevo ingreso</strong> — alta de persona y apertura de expediente activo.</li><li><strong>Buscar paciente ya registrado</strong> — por nombre, DPI, código de referencia o identificador interno.</li><li><strong>Abrir el expediente</strong> de un paciente.</li><li><strong>Agendar una cita</strong> — sin solapar con otra del mismo médico en el mismo intervalo.</li><li><strong>Registrar una consulta ocurrida</strong> — opcionalmente ligada a una cita previa.</li><li><strong>Agregar un diagnóstico</strong> a una consulta (catálogo y/o texto libre).</li><li><strong>Recetar un medicamento</strong> (catálogo y/o texto libre, con dosis y frecuencia).</li><li><strong>Consultar el historial</strong> — consultas, diagnósticos, recetas y extensiones de la institución.</li><li><strong>Archivar un expediente</strong> — traslado, fallecimiento u otra baja; no borrar.</li><li><strong>Registrar acceso a información restringida</strong> — auditoría quién / qué / cuándo.</li></ol>
+<h2>Extensión odontología</h2>
+<ol><li><strong>Actualizar estado de una pieza dental</strong> (código FDI).</li><li><strong>Registrar procedimiento dental</strong> ligado a pieza y consulta.</li><li><strong>Consultar odontograma</strong> completo del expediente.</li></ol>
+<h2>Extensión laboratorio</h2>
+<ol><li><strong>Registrar resultado de examen</strong> con estructura según tipo (hematología, orina, cultivo, …).</li><li><strong>Validar o anular</strong> un resultado.</li><li><strong>Listar exámenes de un paciente</strong> ordenados por fecha.</li><li><strong>Abrir un resultado concreto</strong> (con auditoría).</li></ol>
+<h2>Extensión pediatría</h2>
+<ol><li><strong>Registrar paciente menor + datos del tutor</strong>.</li><li><strong>Registrar medición de crecimiento</strong> (actualiza la curva).</li><li><strong>Registrar dosis de vacuna</strong> y programar próxima.</li><li><strong>Listar vacunas pendientes o vencidas</strong> a una fecha.</li><li><strong>Consultar curva de crecimiento</strong> del paciente.</li><li><strong>Abrir expediente pediátrico</strong> (siempre auditable por ser menor).</li></ol>
+<p>Estas operaciones son idénticas en intención para los cuatro motores; solo cambia *cómo* se persisten.</p>
+</section>
+
+<section class="doc-section" id="09-normalizacion">
+<h1>Normalización (modelos relacionales)</h1>
+<h2>1NF</h2>
+<p>Cada atributo es atómico. El odontograma <strong>no</strong> es un JSON ni 32 columnas: es <code>pieza_dental</code> (una fila por pieza) + <code>procedimiento_dental</code>.</p>
+<h2>2NF</h2>
+<p>No hay atributos que dependan solo de parte de una clave compuesta. Las claves son UUID surrogadas; <code>pieza_dental</code> tiene UNIQUE <code>(expediente_id, codigo_fdi)</code> pero el estado depende de la pieza completa, no solo del código FDI.</p>
+<h2>3NF — dependencias funcionales relevantes</h2>
+<table><thead><tr><th>Determinante</th><th>Depende</th></tr></thead><tbody><tr><td><code>paciente.id</code></td><td>dpi, nombres, apellidos, fecha_nacimiento, contacto</td></tr><tr><td><code>expediente.id</code></td><td>paciente_id, estado, version</td></tr><tr><td><code>consulta.id</code></td><td>expediente_id, medico_id, ocurrida_en, motivo, notas</td></tr><tr><td><code>catalogo_diagnostico.id</code></td><td>codigo, descripcion, sensible</td></tr><tr><td><code>diagnostico.id</code></td><td>consulta_id, catalogo opcional, texto_libre</td></tr><tr><td><code>pieza_dental.id</code></td><td>expediente_id, codigo_fdi, estado</td></tr></tbody></table>
+<p>Los datos de catálogo <strong>no</strong> se repiten como única fuente en diagnóstico/receta: el texto_libre cubre lo no catalogado; el código vive en el catálogo (híbrido).</p>
+<p><strong>Descartado:</strong> guardar solo el string del diagnóstico en la consulta (sinónimo, sin 3NF clara). <strong>Descartado:</strong> EAV para resultados de laboratorio en SQL (anti-solución; por eso Laboratorio va a Mongo).</p>
+</section>
+
+<section class="doc-section" id="10-implementacion">
+<h1>Implementación en motores relacionales</h1>
+<h2>Artefactos</h2>
+<table><thead><tr><th>Motor</th><th>Migración</th><th>Seed</th></tr></thead><tbody><tr><td>PostgreSQL / Hospital</td><td><code>apps/api/src/infraestructura/postgres/migrations/001_clinico.sql</code></td><td><code>.../seeds/001_demo.sql</code></td></tr><tr><td>MySQL / Odontología</td><td><code>apps/api/src/infraestructura/mysql/migrations/001_clinico.sql</code></td><td><code>.../seeds/001_demo.sql</code></td></tr></tbody></table>
+<h2>Cómo aplicar</h2>
+<pre><code class="lang-bash">cp .env.example .env
+docker compose up -d
+pnpm db:migrate
+pnpm db:seed
+pnpm verificar:entrega-1</code></pre>
+<h2>Usuarios de aplicación</h2>
+<table><thead><tr><th>Motor</th><th>Usuario</th><th>Privilegios</th></tr></thead><tbody><tr><td>PostgreSQL</td><td><code>hospital_app</code></td><td>CONNECT + SELECT/INSERT/UPDATE en schema <code>clinico</code></td></tr><tr><td>MySQL</td><td><code>odontologia_app</code></td><td>SELECT/INSERT/UPDATE en <code>odontologia.*</code></td></tr></tbody></table>
+<p>Sin SUPERUSER / sin DROP en el usuario de app.</p>
+<h2>Fuera de esta entrega</h2>
+<p>MongoDB y Redis están arriba en Compose (infra lista). El <strong>análisis de negocio</strong> de laboratorio y pediátrico está documentado en esta entrega; el esquema/código de adaptadores llega en Entrega II junto con JWT, UI clínica, casos de uso y Event Sourcing del Hospital.</p>
+</section>
+
+<section class="doc-section" id="11-matriz-cobertura">
+<h1>Matriz de cobertura — Entrega I (y más)</h1>
+<p>Comparación entre lo mínimo del enunciado y lo entregado. El proyecto busca <strong>sobrecumplir</strong> el análisis para que Entrega II no reabra levantamiento.</p>
+<table><thead><tr><th>Resultado esperado (enunciado)</th><th>Cobertura</th><th>Evidencia</th></tr></thead><tbody><tr><td>ER de instituciones en motores relacionales</td><td>Completo</td><td>Hospital + Odontología</td></tr><tr><td>Modelo relacional de esas instituciones</td><td>Completo</td><td>Tablas/FK + DDL Postgres/MySQL</td></tr><tr><td>Entidades identificadas</td><td>Completo + extensiones</td><td>Núcleo + odonto + lab + pediátrico</td></tr><tr><td>Atributos por entidad</td><td>Completo + extensiones</td><td>Doc entidades + docs por institución</td></tr><tr><td>Público / confidencial / restringido</td><td>Completo</td><td>Clasificación + matriz 4 instituciones</td></tr><tr><td>BD normalizada (relacional)</td><td>Completo</td><td>1NF–3NF + dependencias funcionales</td></tr><tr><td>Operaciones en lenguaje sencillo</td><td>Completo</td><td>23 operaciones (núcleo + 3 extensiones)</td></tr><tr><td>Implementación en motores relacionales</td><td>Completo</td><td>Migraciones + seeds + verificación</td></tr><tr><td>Análisis de las cuatro instituciones</td><td>Completo (más allá del mínimo)</td><td>Lab y pediátrico con entidades/atributos/ops</td></tr></tbody></table>
+<h2>Extra respecto al enunciado (deliberado)</h2>
+<table><thead><tr><th>Extra</th><th>Para qué</th></tr></thead><tbody><tr><td>Diagrama de contexto 4 motores</td><td>Enmarcar el análisis</td></tr><tr><td>Arquitectura hexagonal (contexto)</td><td>Alinear con el mecanismo habilitador del curso</td></tr><tr><td>Análisis documental laboratorio (embeber vs referenciar)</td><td>Anticipar Entrega II sin implementarlo</td></tr><tr><td>Análisis Redis pediátrico (estructuras + trade-off 1s)</td><td>Idem; Redis como registro</td></tr><tr><td>Nota Firebase → Redis</td><td>Transparencia académica</td></tr><tr><td>Auditoría en el modelo desde Entrega I</td><td>Seguridad transversal</td></tr><tr><td>Odontograma 3NF (32 piezas + procedimientos)</td><td>Extensión de dominio real</td></tr><tr><td>Diagnóstico/medicamento híbrido</td><td>Flexibilidad sin romper normalización</td></tr><tr><td>Compose con 4 motores arriba</td><td>Infra lista; negocio solo en 2</td></tr></tbody></table>
+<h2>Qué queda explícitamente para Entrega II</h2>
+<ul><li>App cliente-servidor funcional y UI idéntica</li><li>JWT / enrutamiento por institución</li><li>Casos de uso sobre los cuatro adaptadores</li><li>Schema validation Mongo, Lua/RedisJSON, Event Sourcing Hospital</li><li>Documento comparativo de modelado / consistencia / seguridad</li></ul>
+</section>
+</body>
+</html>

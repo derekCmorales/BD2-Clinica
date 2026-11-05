@@ -1,0 +1,25 @@
+{
+  "name": "historiales-clinicos",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "preparar": "bash scripts/preparar-entorno.sh",
+    "dev:api": "pnpm --filter @historiales/api start:dev",
+    "dev:web": "pnpm --filter @historiales/web dev",
+    "build": "pnpm -r run build",
+    "docs:mermaid": "node scripts/render-mermaid.mjs",
+    "docs:entrega-1": "node scripts/build-entrega-1-doc.mjs",
+    "docs:entrega-1:full": "pnpm docs:mermaid && pnpm docs:entrega-1",
+    "db:migrate": "bash scripts/aplicar-migraciones.sh",
+    "db:seed": "bash scripts/aplicar-seeds.sh",
+    "verificar:entrega-1": "bash scripts/verificar-entrega-1.sh",
+    "verificar:arquitectura": "bash scripts/verificar-arquitectura.sh",
+    "test": "pnpm --filter @historiales/api test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.17.0"
+  }
+}

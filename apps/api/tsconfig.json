@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2021",
+    "sourceMap": true,
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@dominio/*": ["src/dominio/*"],
+      "@aplicacion/*": ["src/aplicacion/*"],
+      "@infraestructura/*": ["src/infraestructura/*"],
+      "@compartido/*": ["src/compartido/*"]
+    }
+  },
+  "include": ["src/**/*"]
+}

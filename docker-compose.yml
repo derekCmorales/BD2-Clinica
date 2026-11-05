@@ -1,0 +1,151 @@
+# Todos los puertos se publican solo en 127.0.0.1: las bases no quedan expuestas a la red local
+# Puertos de host no-default a propósito: ver comentario en .env.example.
+# con credenciales de desarrollo. Credenciales y usuarios de app salen de .env.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: historiales-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_SUPERUSER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERPASS:-postgres_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-hospital}
+      # Consumidos por infra/postgres/init/01-roles.sh (usuario de app con privilegios mínimos).
+      APP_DB_USER: ${POSTGRES_USER:-hospital_app}
+      APP_DB_PASSWORD: ${POSTGRES_PASSWORD:-hospital_app_dev}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER:-postgres} -d ${POSTGRES_DB:-hospital}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mysql:
+    image: mysql:8.4
+    container_name: historiales-mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-mysql_root_dev}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-odontologia}
+      # Ojo: el entrypoint oficial le da ALL PRIVILEGES a este usuario sobre MYSQL_DATABASE.
+      # La migración 002_privilegios.sql lo reduce a DML mínimo.
+      MYSQL_USER: ${MYSQL_USER:-odontologia_app}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-odontologia_app_dev}
+    ports:
+      - "127.0.0.1:${MYSQL_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./infra/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -uroot"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Replica set de un nodo: requisito de transacciones multi-documento (Entrega II).
+  # Con auth + replSet Mongo exige keyFile (generado por scripts/preparar-entorno.sh, no versionado).
+  # El miembro se anuncia como mongo:27017; desde el host hay que conectar con
+  # directConnection=true (ver MONGO_URI en .env.example) o el driver intentará resolver "mongo".
+  mongo:
+    image: mongo:7
+    container_name: historiales-mongo
+    command: ["--replSet", "rs0", "--bind_ip_all", "--keyFile", "/etc/mongo/keyfile"]
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-mongo_root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-mongo_root_dev}
+      # Consumidos por infra/mongo/init/01-usuario-app.js.
+      MONGO_APP_DATABASE: ${MONGO_DATABASE:-laboratorio}
+      MONGO_APP_USER: ${MONGO_USER:-laboratorio_app}
+      MONGO_APP_PASSWORD: ${MONGO_PASSWORD:-laboratorio_app_dev}
+    ports:
+      - "127.0.0.1:${MONGO_PORT:-27018}:27017"
+    volumes:
+      - mongo_data:/data/db
+      - ./infra/mongo/init:/docker-entrypoint-initdb.d:ro
+      - ./infra/mongo/keyfile:/etc/mongo/keyfile:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\""]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  mongo-init-replica:
+    image: mongo:7
+    container_name: historiales-mongo-init
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-mongo_root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-mongo_root_dev}
+    entrypoint: >
+      bash -c "
+      mongosh --host mongo:27017 -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --quiet --eval
+      \"try { rs.status().ok } catch(e) { rs.initiate({_id:'rs0', members:[{_id:0, host:'mongo:27017'}]}).ok }\"
+      "
+
+  # Sistema de registro del centro pediátrico (persistencia AOF+RDB). NO es caché.
+  # Trade-off: appendfsync everysec puede perder hasta ~1s de escrituras ante un crash del proceso/host.
+  # RedisJSON/RediSearch vienen con redis-stack-server.
+  # ACL: el usuario "default" queda deshabilitado; la app usa un usuario propio sin comandos @dangerous
+  # (FLUSHALL, CONFIG, KEYS, DEBUG, ...). EVAL/EVALSHA (Lua) siguen permitidos.
+  redis-pediatrico:
+    image: redis/redis-stack-server:7.4.0-v1
+    container_name: historiales-redis-pediatrico
+    command:
+      [
+        "redis-stack-server",
+        "--appendonly", "yes",
+        "--appendfsync", "everysec",
+        "--save", "900 1",
+        "--save", "300 10",
+        "--save", "60 10000",
+        "--user", "default", "off",
+        "--user", "${REDIS_PEDIATRICO_USER:-pediatrico_app}", "on", ">${REDIS_PEDIATRICO_PASSWORD:-pediatrico_app_dev}", "~*", "&*", "+@all", "-@dangerous",
+        "--user", "${REDIS_ADMIN_USER:-redis_admin}", "on", ">${REDIS_ADMIN_PASSWORD:-redis_admin_dev}", "~*", "&*", "+@all",
+      ]
+    ports:
+      - "127.0.0.1:${REDIS_PEDIATRICO_PORT:-6390}:6379"
+    volumes:
+      - redis_pediatrico_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "--user", "${REDIS_PEDIATRICO_USER:-pediatrico_app}", "--pass", "${REDIS_PEDIATRICO_PASSWORD:-pediatrico_app_dev}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Caché transversal (volátil). Instancia separada a propósito: la persistencia en Redis es por
+  # instancia, no por DB lógica, así que "DB 0 persistente + DB 1 volátil" en un mismo proceso
+  # es imposible. Límite de memoria + LRU: una caché sin maxmemory crece hasta tumbar el host.
+  redis-cache:
+    image: redis:7.4-alpine
+    container_name: historiales-redis-cache
+    command:
+      [
+        "redis-server",
+        "--save", "",
+        "--appendonly", "no",
+        "--maxmemory", "${REDIS_CACHE_MAXMEMORY:-128mb}",
+        "--maxmemory-policy", "allkeys-lru",
+        "--user", "default", "off",
+        "--user", "${REDIS_CACHE_USER:-cache_app}", "on", ">${REDIS_CACHE_PASSWORD:-cache_app_dev}", "~*", "&*", "+@all", "-@dangerous",
+      ]
+    ports:
+      - "127.0.0.1:${REDIS_CACHE_PORT:-6391}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "--user", "${REDIS_CACHE_USER:-cache_app}", "--pass", "${REDIS_CACHE_PASSWORD:-cache_app_dev}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  postgres_data:
+  mysql_data:
+  mongo_data:
+  redis_pediatrico_data:

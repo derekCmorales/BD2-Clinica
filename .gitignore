@@ -1,0 +1,18 @@
+node_modules/
+dist/
+build/
+.env
+*.log
+.DS_Store
+coverage/
+.turbo/
+apps/api/dist/
+apps/web/dist/
+docs/entrega-1/render/.cache/
+*.tsbuildinfo
+.idea/
+.vscode/
+!docs/entrega-1/render/*.svg
+.tmp-docx-png/
+# Secreto local de Mongo (lo genera scripts/preparar-entorno.sh).
+infra/mongo/keyfile
