@@ -58,10 +58,22 @@ export class ErrorApi extends Error {
   constructor(
     message: string,
     readonly estado: number,
+    readonly codigo?: string,
   ) {
     super(message);
   }
 }
+
+/** Mensajes en lenguaje del médico para los errores de dominio que expone el API. */
+const MENSAJES: Record<string, string> = {
+  ConflictoDeConcurrencia: 'Alguien más modificó este expediente mientras lo editabas. Se recargó la versión más reciente; revisa y vuelve a intentarlo.',
+  ExpedienteArchivado: 'El expediente está archivado: solo se puede consultar.',
+  PacienteNoEncontrado: 'No se encontró el paciente.',
+  ConsultaNoEncontrada: 'La consulta ya no existe en el expediente.',
+  CitaSolapada: 'Ese horario se cruza con otra cita.',
+};
+
+export const SESION_EXPIRADA = 'sesion-expirada';
 
 export async function llamar<T>(ruta: string, token: string | null, init?: RequestInit): Promise<T> {
   const encabezados = new Headers(init?.headers);
@@ -69,10 +81,27 @@ export async function llamar<T>(ruta: string, token: string | null, init?: Reque
   if (token) {
     encabezados.set('Authorization', `Bearer ${token}`);
   }
-  const respuesta = await fetch(ruta, { ...init, headers: encabezados });
-  const cuerpo = (await respuesta.json().catch(() => null)) as { mensaje?: string } | null;
+  let respuesta: Response;
+  try {
+    respuesta = await fetch(ruta, { ...init, headers: encabezados });
+  } catch {
+    throw new ErrorApi('No hay conexión con el servidor.', 0);
+  }
+  const cuerpo = (await respuesta.json().catch(() => null)) as
+    | { mensaje?: string; error?: string; message?: string | string[] }
+    | null;
   if (!respuesta.ok) {
-    throw new ErrorApi(cuerpo?.mensaje ?? 'No se pudo completar la operación', respuesta.status);
+    if (respuesta.status === 401 && token) {
+      window.dispatchEvent(new Event(SESION_EXPIRADA));
+      throw new ErrorApi('Tu sesión expiró. Vuelve a ingresar.', 401);
+    }
+    if (respuesta.status === 401) {
+      throw new ErrorApi('Clave incorrecta para esta institución.', 401);
+    }
+    const codigo = cuerpo?.error;
+    const validacion = Array.isArray(cuerpo?.message) ? 'Revisa los campos del formulario.' : undefined;
+    const texto = (codigo && MENSAJES[codigo]) ?? cuerpo?.mensaje ?? validacion ?? 'No se pudo completar la operación.';
+    throw new ErrorApi(texto, respuesta.status, codigo);
   }
   return cuerpo as T;
 }

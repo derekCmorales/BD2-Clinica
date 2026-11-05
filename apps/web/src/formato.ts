@@ -61,3 +61,37 @@ export function vencida(fecha: string): boolean {
   hoy.setHours(0, 0, 0, 0);
   return objetivo.getTime() < hoy.getTime();
 }
+
+/** Fecha local de hoy en formato ISO (YYYY-MM-DD), para valores por defecto de formularios. */
+export function hoyIso(desplazamientoDias = 0): string {
+  const fecha = new Date();
+  fecha.setDate(fecha.getDate() + desplazamientoDias);
+  const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+  const dia = String(fecha.getDate()).padStart(2, '0');
+  return `${fecha.getFullYear()}-${mes}-${dia}`;
+}
+
+/** datetime-local de hoy a la hora indicada. */
+export function hoyHora(hora: number, minutos = 0, desplazamientoDias = 1): string {
+  return `${hoyIso(desplazamientoDias)}T${String(hora).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
+}
+
+export function esMenor(fechaNacimiento: string): boolean {
+  const nacio = parsearFecha(fechaNacimiento);
+  const limite = new Date();
+  limite.setFullYear(limite.getFullYear() - 18);
+  return nacio.getTime() > limite.getTime();
+}
+
+export function fechaRelativa(valor: string): string {
+  const objetivo = parsearFecha(valor);
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  objetivo.setHours(0, 0, 0, 0);
+  const dias = Math.round((objetivo.getTime() - hoy.getTime()) / 86_400_000);
+  if (dias === 0) return 'hoy';
+  if (dias === -1) return 'ayer';
+  if (dias === 1) return 'mañana';
+  if (dias < 0) return `hace ${-dias} d`;
+  return `en ${dias} d`;
+}

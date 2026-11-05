@@ -57,11 +57,35 @@ Los usuarios de init (`01-roles.sh`, `01-usuario-app.js`) solo se crean con volu
 
 ```
 apps/api/          NestJS hexagonal (dominio / aplicacion / infraestructura)
-apps/web/          Cliente placeholder
+apps/web/          Cliente React (misma UI para las cuatro instituciones)
 docs/entrega-1/    Entregable académico
+docs/design-system/ Tokens, componentes y capturas del cliente
+openspec/          Fases pendientes hasta la entrega final (OpenSpec)
 infra/             Init de Compose (roles, charset, redis)
 scripts/           migrate, seed, verificar, mermaid
 ```
+
+## Hoja de ruta (OpenSpec)
+
+Cada fase hasta la entrega final es un change abierto en [`openspec/changes/`](openspec/changes/).
+Las tareas marcadas `[DECISIÓN]` esperan una decisión de modelado del estudiante.
+
+```bash
+npx @fission-ai/openspec@1.16.0 list       # progreso por fase
+npx @fission-ai/openspec@1.16.0 validate --all
+```
+
+| Fase | Change | Estado |
+|---|---|---|
+| 1 | `fase-1-design-system` | Implementado · pendiente de aprobación |
+| 2 | `fase-2-pantallas-clinicas` | Implementado · pendiente de aprobación |
+| 3 | `fase-3-seguridad-visible` | UI hecha · bitácora pendiente de decisión |
+| 4 | `fase-4-contrato-adaptadores` | Pendiente |
+| 5 | `fase-5-proyector-read-model` | Pendiente de decisión |
+| 6 | `fase-6-laboratorio-por-tipo` | Pendiente de decisión |
+| 7 | `fase-7-pruebas-e2e` | Pendiente |
+| 8 | `fase-8-documento-comparativo` | Pendiente |
+| 9 | `fase-9-entrega-final` | Pendiente |
 
 ## Nota Redis vs Firebase
 
