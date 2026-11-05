@@ -282,8 +282,8 @@ export class PostgresExpedienteRepository implements ExpedienteRepository, Exped
     }
     await client.query(
       `UPDATE clinico.expediente
-       SET version = $2, estado = $3, motivo_archivo = $4,
-           archivado_en = CASE WHEN $3 = 'archivado' THEN COALESCE(archivado_en, $5::timestamptz) ELSE NULL END,
+       SET version = $2, estado = $3::varchar, motivo_archivo = $4,
+           archivado_en = CASE WHEN $3::text = 'archivado' THEN COALESCE(archivado_en, $5::timestamptz) ELSE NULL END,
            extensiones = $6::jsonb
        WHERE paciente_id = $1`,
       [

@@ -89,8 +89,9 @@ export class MysqlExpedienteRepository implements ExpedienteRepository, Expedien
     }
     const conn = await this.conexion().getConnection();
     try {
-      await conn.beginTransaction();
+      // Las características de la transacción se fijan antes de abrirla.
       await conn.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ');
+      await conn.beginTransaction();
       const [bloqueadas] = await conn.query<RowDataPacket[]>(
         'SELECT version FROM expediente WHERE paciente_id = ? FOR UPDATE',
         [expediente.pacienteId],

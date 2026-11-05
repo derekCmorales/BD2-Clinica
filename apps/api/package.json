@@ -7,7 +7,8 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
-    "test": "jest --config jest.config.cjs"
+    "test": "jest --config jest.config.cjs",
+    "test:contrato": "jest --config jest.contrato.config.cjs --runInBand --forceExit"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

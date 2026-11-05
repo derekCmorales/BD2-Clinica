@@ -14,7 +14,8 @@
     "db:seed": "bash scripts/aplicar-seeds.sh",
     "verificar:entrega-1": "bash scripts/verificar-entrega-1.sh",
     "verificar:arquitectura": "bash scripts/verificar-arquitectura.sh",
-    "test": "pnpm --filter @historiales/api test"
+    "test": "pnpm --filter @historiales/api test",
+    "test:contrato": "bash scripts/test-contrato.sh"
   },
   "engines": {
     "node": ">=20"

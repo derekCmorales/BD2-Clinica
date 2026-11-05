@@ -228,7 +228,10 @@ export class RedisExpedienteRepository implements ExpedienteRepository, Expedien
         username: this.config.get<string>('REDIS_PEDIATRICO_USER', 'pediatrico_app'),
         password: this.config.get<string>('REDIS_PEDIATRICO_PASSWORD', 'pediatrico_app_dev'),
         maxRetriesPerRequest: 1,
-        enableOfflineQueue: false,
+        // El usuario de app no tiene INFO; el ready check fallaría y se saltaría.
+        enableReadyCheck: false,
+        // La primera escritura puede llegar antes de que el socket esté listo; se encola.
+        enableOfflineQueue: true,
       });
       this.cliente.on('error', (error: Error) => {
         this.logger.error(`RedisNoDisponible: ${error.name}`);

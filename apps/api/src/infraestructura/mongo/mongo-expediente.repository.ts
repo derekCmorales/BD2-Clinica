@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
+import * as os from 'os';
 import { MongoClient, type ClientSession, type Collection, type Document } from 'mongodb';
 import type { PacienteId } from '../../compartido/tipos';
 import { dosisPendientes } from '../../aplicacion/dosis-pendientes';
@@ -213,7 +214,8 @@ export class MongoExpedienteRepository implements ExpedienteRepository, Expedien
         'MONGO_URI',
         'mongodb://laboratorio_app:laboratorio_app_dev@localhost:27018/laboratorio?authSource=laboratorio&directConnection=true',
       );
-      this.cliente = new MongoClient(uri);
+      // `runtimeAdapters.os` evita el import() dinámico del driver, que se cuelga bajo Jest.
+      this.cliente = new MongoClient(uri, { runtimeAdapters: { os } });
     }
     return this.cliente;
   }
