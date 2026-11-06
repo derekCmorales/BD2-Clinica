@@ -33,6 +33,8 @@ export interface AdaptadorDeContrato {
   readonly repositorio: RepositorioCompleto;
   readonly capacidades: CapacidadesDeContrato;
   leerAuditoria(pacienteId: string): Promise<EntradaAuditoriaLeida[]>;
+  /** Solo el Hospital (event store) puede reconstruir su read model desde eventos. */
+  reproyectar?(pacienteId: string): Promise<void>;
   cerrar(): Promise<void>;
 }
 
@@ -80,6 +82,14 @@ function adaptadorDePostgres(config: ConfigService): AdaptadorDeContrato {
     password: config.get<string>('POSTGRES_PASSWORD', 'hospital_app_dev'),
     max: 2,
   });
+  const superPool = new PgPool({
+    host: config.get<string>('POSTGRES_HOST', 'localhost'),
+    port: Number(config.get<string>('POSTGRES_PORT', '5433')),
+    database: config.get<string>('POSTGRES_DB', 'hospital'),
+    user: config.get<string>('POSTGRES_SUPERUSER', 'postgres'),
+    password: config.get<string>('POSTGRES_SUPERPASS', 'postgres_dev'),
+    max: 2,
+  });
   return {
     institucion: 'hospital',
     motor: 'PostgreSQL',
@@ -105,9 +115,28 @@ function adaptadorDePostgres(config: ConfigService): AdaptadorDeContrato {
         ocurridoEn: fila.ocurrido_en.toISOString(),
       }));
     },
+    async reproyectar(_pacienteId: string) {
+      const client = await superPool.connect();
+      try {
+        await client.query(
+          `TRUNCATE TABLE
+             clinico.proyeccion_aplicada,
+             clinico.receta,
+             clinico.diagnostico,
+             clinico.consulta,
+             clinico.cita,
+             clinico.expediente
+           CASCADE`,
+        );
+      } finally {
+        client.release();
+      }
+      await repositorio.reproyectar();
+    },
     async cerrar() {
       await repositorio.cerrar();
       await pool.end();
+      await superPool.end();
     },
   };
 }

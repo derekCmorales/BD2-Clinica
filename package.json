@@ -18,7 +18,8 @@
     "test": "pnpm --filter @historiales/api test",
     "test:contrato": "bash scripts/test-contrato.sh",
     "e2e:rapido": "bash scripts/e2e-rapido.sh",
-    "e2e:motores": "bash scripts/e2e-motores.sh"
+    "e2e:motores": "bash scripts/e2e-motores.sh",
+    "hospital:reproyectar": "bash scripts/hospital-reproyectar.sh"
   },
   "engines": {
     "node": ">=20"

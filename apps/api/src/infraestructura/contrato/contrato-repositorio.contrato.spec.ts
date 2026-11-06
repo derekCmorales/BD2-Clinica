@@ -127,6 +127,35 @@ describe.each(adaptadores)('contrato de adaptador: %s', (_nombre, adaptador) => 
     await expect(adaptador.repositorio.guardar(segunda)).rejects.toBeInstanceOf(ConflictoDeConcurrencia);
   });
 
+  it('reconstruye el read model desde los eventos (si el adaptador lo soporta)', async () => {
+    if (!adaptador.reproyectar) {
+      return;
+    }
+    const vista = await crearPaciente(adaptador, actor);
+    const pacienteId = marcarPacienteId(vista.pacienteId);
+    const registrarConsulta = new RegistrarConsulta(adaptador.repositorio, adaptador.repositorio);
+    const agregarDiagnostico = new AgregarDiagnostico(adaptador.repositorio, adaptador.repositorio);
+    const recetar = new RecetarMedicamento(adaptador.repositorio, adaptador.repositorio);
+
+    const conConsulta = await registrarConsulta.ejecutar(pacienteId, { motivo: 'Reconstrucción desde eventos' }, actor);
+    const consultaId = conConsulta.consultas[0].id;
+    await agregarDiagnostico.ejecutar(pacienteId, consultaId, { textoLibre: 'Diagnóstico reconstruido' }, actor);
+    await recetar.ejecutar(
+      pacienteId,
+      consultaId,
+      { textoLibre: 'Medicamento reconstruido', dosis: '1 tableta', frecuencia: 'cada 12 horas' },
+      actor,
+    );
+
+    await adaptador.reproyectar(pacienteId);
+
+    const recuperado = await adaptador.repositorio.obtener(pacienteId);
+    expect(recuperado?.version).toBe(4);
+    expect(recuperado?.consultas).toHaveLength(1);
+    expect(recuperado?.consultas[0].diagnosticos[0].textoLibre).toBe('Diagnóstico reconstruido');
+    expect(recuperado?.consultas[0].recetas[0].textoLibre).toBe('Medicamento reconstruido');
+  });
+
   it('deja una entrada de auditoría por lectura restringida', async () => {
     const vista = await crearPaciente(adaptador, actor);
     const pacienteId = marcarPacienteId(vista.pacienteId);
