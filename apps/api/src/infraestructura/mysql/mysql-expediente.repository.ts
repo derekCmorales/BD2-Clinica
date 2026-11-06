@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { createPool, type Pool, type PoolConnection, type RowDataPacket } from 'mysql2/promise';
 import type { PacienteId } from '../../compartido/tipos';
-import { marcarActorId, marcarCitaId, marcarConsultaId } from '../../compartido/tipos';
+import { marcarActorId, marcarCitaId, marcarConsultaId, marcarPacienteId } from '../../compartido/tipos';
 import { dosisPendientes } from '../../aplicacion/dosis-pendientes';
 import { aVista } from '../../aplicacion/vista';
 import type { EventoDeDominio } from '../../dominio/eventos/eventos';
@@ -11,6 +11,7 @@ import { Expediente } from '../../dominio/modelo/expediente';
 import type { Cita, Consulta, Medicion, PiezaDental, ResultadoExamen, Vacuna } from '../../dominio/modelo/tipos-clinicos';
 import { CitaSolapada, ConflictoDeConcurrencia, DatosInvalidos } from '../../dominio/errores/errores-dominio';
 import type { AuditLog, EntradaAuditoria } from '../../dominio/puertos/audit-log';
+import type { ConsultaDeAuditoria } from '../../dominio/puertos/consulta-de-auditoria';
 import type { ExpedienteRepository } from '../../dominio/puertos/expediente.repository';
 import type {
   CriterioBusqueda,
@@ -35,7 +36,9 @@ interface ExtraJson {
  * La fila del médico se bloquea con SELECT ... FOR UPDATE antes de reservar una cita.
  */
 @Injectable()
-export class MysqlExpedienteRepository implements ExpedienteRepository, ExpedienteQueryService, AuditLog {
+export class MysqlExpedienteRepository
+  implements ExpedienteRepository, ExpedienteQueryService, AuditLog, ConsultaDeAuditoria
+{
   private pool?: Pool;
 
   constructor(private readonly config: ConfigService) {}
@@ -182,6 +185,24 @@ export class MysqlExpedienteRepository implements ExpedienteRepository, Expedien
       `INSERT INTO auditoria_acceso (id, actor_id, paciente_id, accion, recurso) VALUES (?, ?, ?, ?, ?)`,
       [randomUUID(), entrada.actorId, entrada.pacienteId, entrada.accion, entrada.recurso],
     );
+  }
+
+  async entradasDe(pacienteId: PacienteId): Promise<readonly EntradaAuditoria[]> {
+    const [filas] = await this.conexion().query<RowDataPacket[]>(
+      `SELECT actor_id, paciente_id, accion, recurso, ocurrido_en
+       FROM auditoria_acceso
+       WHERE paciente_id = ?
+       ORDER BY ocurrido_en DESC
+       LIMIT 100`,
+      [pacienteId],
+    );
+    return filas.map((fila) => ({
+      actorId: marcarActorId(String(fila.actor_id)),
+      pacienteId: marcarPacienteId(String(fila.paciente_id)),
+      accion: fila.accion,
+      recurso: String(fila.recurso),
+      ocurridoEn: instante(fila.ocurrido_en),
+    }));
   }
 
   async cerrar(): Promise<void> {

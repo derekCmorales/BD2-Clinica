@@ -8,14 +8,14 @@
 
 ## 2. Bitácora
 
-- [ ] 2.1 [DECISIÓN] Elegir dónde vive la lectura de auditoría (Decisión 1)
-- [ ] 2.2 [DECISIÓN] ¿Revelar el DPI se audita? (Decisión 2)
-- [ ] 2.3 Implementar lectura en los 4 adaptadores + memoria
-- [ ] 2.4 Endpoint `GET /pacientes/:pacienteId/auditoria` + DTO + OpenAPI
-- [ ] 2.5 Panel «Accesos» en el cliente
-- [ ] 2.6 Revisar privilegios mínimos de lectura en Mongo y ACL de Redis
+- [x] 2.1 [DECISIÓN] Elegir dónde vive la lectura de auditoría (Decisión 1) — puerto nuevo `ConsultaDeAuditoria`
+- [x] 2.2 [DECISIÓN] ¿Revelar el DPI se audita? (Decisión 2) — no se audita; el DPI es confidencial, no restringido
+- [x] 2.3 Implementar lectura en los 4 adaptadores + memoria
+- [x] 2.4 Endpoint `GET /pacientes/:pacienteId/auditoria` + DTO + OpenAPI
+- [x] 2.5 Panel «Accesos» en el cliente
+- [x] 2.6 Revisar privilegios mínimos de lectura en Mongo y ACL de Redis
 
 ## 3. Verificación
 
-- [ ] 3.1 Test que intercepta `Logger` y falla si aparece un campo restringido
-- [ ] 3.2 Caso e2e: abrir expediente → aparece entrada en «Accesos»
+- [x] 3.1 Test que intercepta `Logger` y falla si aparece un campo restringido
+- [x] 3.2 Caso e2e: abrir expediente → aparece entrada en «Accesos»

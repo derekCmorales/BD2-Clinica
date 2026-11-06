@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import {
   INSTITUCIONES,
   abrirPaciente,
@@ -15,6 +15,7 @@ import {
   registrarMedicion,
   registrarProcedimiento,
   registrarReceta,
+  reabrirPaciente,
   reservarCita,
   revisarAccesibilidad,
 } from './apoyo';
@@ -34,6 +35,13 @@ for (const institucion of INSTITUCIONES) {
 
     await crearPaciente(page, datos);
     await abrirPaciente(page, datos);
+    await reabrirPaciente(page, datos);
+
+    await irASeccion(page, 'Accesos');
+    await expect(page.getByText('expediente', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('lectura', { exact: true }).first()).toBeVisible();
+    await revisarAccesibilidad(page, 'pestaña Accesos');
+    await captura(page, `accesos-${sufijo}`);
 
     await registrarConsulta(page, `Control de ${institucion.nombre}`);
     await revisarAccesibilidad(page, 'pestaña Consultas');

@@ -46,6 +46,13 @@ export interface ExpedienteVista {
   procedimientos?: Array<{ id: string; codigoFdi: number; consultaId: string; tipo: string; descripcion: string; realizadoEn: string }>;
 }
 
+export interface EntradaAuditoria {
+  actorId: string;
+  accion: 'lectura' | 'escritura';
+  recurso: string;
+  ocurridoEn: string;
+}
+
 export interface VacunaPendiente {
   pacienteId: string;
   nombres: string;

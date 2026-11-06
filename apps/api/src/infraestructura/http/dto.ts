@@ -228,3 +228,18 @@ export class PiezaDto {
   @IsString()
   estado!: string;
 }
+
+/** Metadatos de la bitácora: nunca incluye payload clínico. */
+export class EntradaAuditoriaDto {
+  @ApiProperty()
+  actorId!: string;
+
+  @ApiProperty({ enum: ['lectura', 'escritura'] })
+  accion!: 'lectura' | 'escritura';
+
+  @ApiProperty({ example: 'expediente' })
+  recurso!: string;
+
+  @ApiProperty({ example: '2026-11-05T12:00:00.000Z' })
+  ocurridoEn!: string;
+}

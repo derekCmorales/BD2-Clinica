@@ -3,13 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import * as os from 'os';
 import { MongoClient, type ClientSession, type Collection, type Document } from 'mongodb';
-import type { PacienteId } from '../../compartido/tipos';
+import { marcarActorId, marcarPacienteId, type PacienteId } from '../../compartido/tipos';
 import { dosisPendientes } from '../../aplicacion/dosis-pendientes';
 import { aVista } from '../../aplicacion/vista';
 import { Expediente } from '../../dominio/modelo/expediente';
 import type { Cita, DatosPaciente, ResultadoExamen } from '../../dominio/modelo/tipos-clinicos';
 import { CitaSolapada, ConflictoDeConcurrencia } from '../../dominio/errores/errores-dominio';
 import type { AuditLog, EntradaAuditoria } from '../../dominio/puertos/audit-log';
+import type { ConsultaDeAuditoria } from '../../dominio/puertos/consulta-de-auditoria';
 import type { ExpedienteRepository } from '../../dominio/puertos/expediente.repository';
 import type {
   CriterioBusqueda,
@@ -39,7 +40,9 @@ interface DocumentoExpediente extends Document {
  * Los exámenes no van embebidos: colección `examenes`, validada por tipo.
  */
 @Injectable()
-export class MongoExpedienteRepository implements ExpedienteRepository, ExpedienteQueryService, AuditLog {
+export class MongoExpedienteRepository
+  implements ExpedienteRepository, ExpedienteQueryService, AuditLog, ConsultaDeAuditoria
+{
   private cliente?: MongoClient;
 
   constructor(private readonly config: ConfigService) {}
@@ -169,6 +172,23 @@ export class MongoExpedienteRepository implements ExpedienteRepository, Expedien
       recurso: entrada.recurso,
       ocurridoEn: entrada.ocurridoEn,
     });
+  }
+
+  async entradasDe(pacienteId: PacienteId): Promise<readonly EntradaAuditoria[]> {
+    const filas = await this.conexion()
+      .db()
+      .collection('auditoria')
+      .find({ pacienteId })
+      .sort({ ocurridoEn: -1 })
+      .limit(100)
+      .toArray();
+    return filas.map((fila) => ({
+      actorId: marcarActorId(String(fila.actorId)),
+      pacienteId: marcarPacienteId(String(fila.pacienteId)),
+      accion: fila.accion,
+      recurso: String(fila.recurso),
+      ocurridoEn: String(fila.ocurridoEn),
+    }));
   }
 
   async cerrar(): Promise<void> {

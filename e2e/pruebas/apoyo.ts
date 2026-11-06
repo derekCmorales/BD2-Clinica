@@ -71,6 +71,19 @@ export async function abrirPaciente(page: Page, datos: DatosSinteticos): Promise
   await expect(cabecera).toBeVisible();
 }
 
+/** Fuerza una lectura nueva del expediente (genera entrada de auditoría). */
+export async function reabrirPaciente(page: Page, datos: DatosSinteticos): Promise<void> {
+  const volver = page.getByRole('button', { name: '← Pacientes' });
+  if (await volver.isVisible().catch(() => false)) {
+    await volver.click();
+  }
+  await page
+    .getByRole('button', { name: new RegExp(`${datos.apellidos}, ${datos.nombres}`) })
+    .first()
+    .click();
+  await expect(page.getByRole('heading', { name: new RegExp(`${datos.nombres} ${datos.apellidos}`) })).toBeVisible();
+}
+
 export async function irASeccion(page: Page, nombre: string): Promise<void> {
   await page.getByRole('tab', { name: new RegExp(nombre) }).click();
 }

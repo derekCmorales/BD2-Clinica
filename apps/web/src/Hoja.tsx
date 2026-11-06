@@ -1,5 +1,5 @@
 import { type ReactNode, useMemo, useState } from 'react';
-import type { ExpedienteVista } from './api';
+import type { EntradaAuditoria, ExpedienteVista } from './api';
 import { fechaHora, fechaLegible, fechaRelativa, hoyHora, hoyIso, parsearFecha, vencida } from './formato';
 import { Grafica } from './Grafica';
 import {
@@ -7,6 +7,7 @@ import {
   Boton,
   Campo,
   Dialogo,
+  Esqueleto,
   EtiquetaClasificacion,
   Icono,
   Insignia,
@@ -15,7 +16,21 @@ import {
   type Tono,
 } from './ui';
 
-export type Seccion = 'resumen' | 'consultas' | 'agenda' | 'laboratorio' | 'crecimiento' | 'vacunas' | 'odontograma';
+export type Seccion =
+  | 'resumen'
+  | 'consultas'
+  | 'agenda'
+  | 'laboratorio'
+  | 'crecimiento'
+  | 'vacunas'
+  | 'odontograma'
+  | 'accesos';
+
+export interface AuditoriaVista {
+  readonly entradas: readonly EntradaAuditoria[];
+  readonly cargando: boolean;
+  readonly error: string;
+}
 
 type Enviar = (ruta: string, cuerpo: unknown, exito?: string) => Promise<boolean>;
 
@@ -65,11 +80,13 @@ export function Hoja({
   expediente,
   ocupado,
   onEnviar,
+  auditoria,
 }: {
   seccion: Seccion;
   expediente: ExpedienteVista;
   ocupado: boolean;
   onEnviar: Enviar;
+  auditoria: AuditoriaVista;
 }) {
   const props: AccionProps = {
     expediente,
@@ -91,6 +108,8 @@ export function Hoja({
       return <Crecimiento {...props} />;
     case 'vacunas':
       return <Vacunas {...props} />;
+    case 'accesos':
+      return <Accesos auditoria={auditoria} />;
     default:
       return <Odontograma {...props} />;
   }
@@ -1182,6 +1201,69 @@ function Odontograma({ expediente, base, cerrado, ocupado, onEnviar }: AccionPro
           </div>
         </Dialogo>
       ) : null}
+    </div>
+  );
+}
+
+/* ───────────── Accesos (bitácora de auditoría) ───────────── */
+
+const TONO_ACCION: Record<string, Tono> = { lectura: 'info', escritura: 'warning' };
+
+function Accesos({ auditoria }: { auditoria: AuditoriaVista }) {
+  return (
+    <div className="seccion">
+      <Barra
+        titulo="Accesos al expediente"
+        descripcion="Quién consultó o modificó este historial. Solo metadatos: nunca el contenido clínico."
+        clasificacion="restringido"
+      />
+      {auditoria.error ? <Alerta tono="danger" titulo="No se pudo leer la bitácora">{auditoria.error}</Alerta> : null}
+      {auditoria.cargando ? (
+        <div className="card">
+          <div className="card__body" style={{ display: 'grid', gap: 10 }} aria-busy="true">
+            {[0, 1, 2, 3].map((indice) => (
+              <Esqueleto key={indice} ancho={indice % 2 === 0 ? '80%' : '60%'} />
+            ))}
+          </div>
+        </div>
+      ) : auditoria.entradas.length === 0 ? (
+        <div className="card">
+          <Vacio icono="escudo" titulo="Sin accesos registrados">
+            La bitácora se llena con cada lectura o escritura del expediente.
+          </Vacio>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th scope="col">Fecha</th>
+                <th scope="col">Actor</th>
+                <th scope="col">Acción</th>
+                <th scope="col">Recurso</th>
+              </tr>
+            </thead>
+            <tbody>
+              {auditoria.entradas.map((entrada, indice) => (
+                <tr key={`${entrada.ocurridoEn}-${entrada.actorId}-${indice}`}>
+                  <td>
+                    <time dateTime={entrada.ocurridoEn}>{fechaHora(entrada.ocurridoEn)}</time>
+                  </td>
+                  <td className="mono" title={entrada.actorId}>
+                    {entrada.actorId.slice(0, 8)}
+                  </td>
+                  <td>
+                    <Insignia tono={TONO_ACCION[entrada.accion] ?? 'neutral'} punto>
+                      <span style={{ textTransform: 'capitalize' }}>{entrada.accion}</span>
+                    </Insignia>
+                  </td>
+                  <td className="mono">{entrada.recurso}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

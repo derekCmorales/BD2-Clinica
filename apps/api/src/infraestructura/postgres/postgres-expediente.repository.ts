@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { Pool, type PoolClient } from 'pg';
 import type Redis from 'ioredis';
 import type { PacienteId } from '../../compartido/tipos';
-import { marcarActorId, marcarCitaId, marcarConsultaId } from '../../compartido/tipos';
+import { marcarActorId, marcarCitaId, marcarConsultaId, marcarPacienteId } from '../../compartido/tipos';
 import { aVista } from '../../aplicacion/vista';
 import type { EventoDeDominio } from '../../dominio/eventos/eventos';
 import { Expediente } from '../../dominio/modelo/expediente';
@@ -21,6 +21,7 @@ import type {
 } from '../../dominio/modelo/tipos-clinicos';
 import { CitaSolapada, ConflictoDeConcurrencia } from '../../dominio/errores/errores-dominio';
 import type { AuditLog, EntradaAuditoria } from '../../dominio/puertos/audit-log';
+import type { ConsultaDeAuditoria } from '../../dominio/puertos/consulta-de-auditoria';
 import type { ExpedienteRepository } from '../../dominio/puertos/expediente.repository';
 import type {
   CriterioBusqueda,
@@ -49,7 +50,9 @@ interface Extensiones {
  * Después del commit se publica el id del evento en Redis Streams; el payload no sale de Postgres.
  */
 @Injectable()
-export class PostgresExpedienteRepository implements ExpedienteRepository, ExpedienteQueryService, AuditLog {
+export class PostgresExpedienteRepository
+  implements ExpedienteRepository, ExpedienteQueryService, AuditLog, ConsultaDeAuditoria
+{
   private readonly logger = new Logger(PostgresExpedienteRepository.name);
   private pool?: Pool;
   private stream?: Redis;
@@ -210,6 +213,30 @@ export class PostgresExpedienteRepository implements ExpedienteRepository, Exped
        VALUES ($1, $2, $3, $4, $5)`,
       [randomUUID(), entrada.actorId, entrada.pacienteId, entrada.accion, entrada.recurso],
     );
+  }
+
+  async entradasDe(pacienteId: PacienteId): Promise<readonly EntradaAuditoria[]> {
+    const filas = await this.conexion().query<{
+      actor_id: string;
+      paciente_id: string;
+      accion: EntradaAuditoria['accion'];
+      recurso: string;
+      ocurrido_en: Date;
+    }>(
+      `SELECT actor_id, paciente_id, accion, recurso, ocurrido_en
+       FROM clinico.auditoria_acceso
+       WHERE paciente_id = $1
+       ORDER BY ocurrido_en DESC
+       LIMIT 100`,
+      [pacienteId],
+    );
+    return filas.rows.map((fila) => ({
+      actorId: marcarActorId(fila.actor_id),
+      pacienteId: marcarPacienteId(fila.paciente_id),
+      accion: fila.accion,
+      recurso: fila.recurso,
+      ocurridoEn: fila.ocurrido_en.toISOString(),
+    }));
   }
 
   async cerrar(): Promise<void> {
