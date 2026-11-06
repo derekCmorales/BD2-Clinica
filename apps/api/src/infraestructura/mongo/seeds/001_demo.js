@@ -4,10 +4,10 @@ const nombre = process.env.MONGO_APP_DATABASE || 'laboratorio';
 const base = db.getSiblingDB(nombre);
 const pacienteId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
 const expedienteId = 'e3333333-3333-3333-3333-333333333333';
-
-base.expedientes.deleteMany({ pacienteId });
-base.examenes.deleteMany({ pacienteId });
-base.auditoria.deleteMany({ pacienteId });
+// Destructivo a propósito: deja solo los datos sintéticos de demostración.
+base.expedientes.deleteMany({});
+base.examenes.deleteMany({});
+base.auditoria.deleteMany({});
 
 base.expedientes.insertOne({
   pacienteId,
@@ -111,4 +111,73 @@ base.auditoria.insertOne({
   accion: 'lectura',
   recurso: 'expediente',
   ocurridoEn: '2026-09-03T10:00:00.000Z',
+});
+
+// Paciente archivado: sirve para el filtro «Archivados» y el modo solo lectura.
+base.expedientes.insertOne({
+  pacienteId: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+  expedienteId: 'e5555555-5555-5555-5555-555555555555',
+  version: 2,
+  estado: 'archivado',
+  motivoArchivo: 'Traslado a otra institución',
+  datos: {
+    dpi: '3011223344557',
+    nombres: 'Jorge',
+    apellidos: 'Archivado Demo',
+    fechaNacimiento: '1970-05-05',
+    sexo: 'M',
+  },
+  consultas: [],
+  citas: [],
+  mediciones: [],
+  vacunas: [],
+  piezas: [],
+  procedimientos: [],
+});
+
+// Paciente menor: la UI muestra la insignia «Menor de edad».
+base.expedientes.insertOne({
+  pacienteId: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+  expedienteId: 'e6666666-6666-6666-6666-666666666666',
+  version: 1,
+  estado: 'activo',
+  datos: {
+    dpi: '3011223344558',
+    nombres: 'Lucía',
+    apellidos: 'Menor Demo',
+    fechaNacimiento: '2018-06-15',
+    sexo: 'F',
+    tutorNombre: 'Marta Demo',
+    tutorTelefono: '5025553005',
+  },
+  consultas: [],
+  citas: [],
+  mediciones: [],
+  vacunas: [],
+  piezas: [],
+  procedimientos: [],
+});
+
+base.examenes.insertOne({
+  id: 'e6666666-0001-6666-6666-666666666666',
+  pacienteId: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+  tipoExamen: 'hematologia',
+  fecha: '2026-09-12',
+  estado: 'validado',
+  valores: {
+    hemoglobina: '12.8',
+    hematocrito: '38',
+    leucocitos: '6.1',
+    plaquetas: '300',
+    eritrocitos: '4.6',
+  },
+});
+
+base.auditoria.insertOne({
+  id: 'a6666666-0001-6666-6666-666666666666',
+  actorId: '33333333-3333-3333-3333-333333333333',
+  pacienteId: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+  accion: 'lectura',
+  recurso: 'expediente',
+  ocurridoEn: '2026-09-12T10:00:00.000Z',
 });

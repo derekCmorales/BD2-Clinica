@@ -22,11 +22,16 @@ INSERT INTO usuario (id, nombre, correo, rol, especialidad) VALUES
 
 INSERT INTO paciente (id, dpi, nombres, apellidos, fecha_nacimiento, sexo, telefono, direccion) VALUES
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '2987654321098', 'Sofía', 'García Demo', '1992-07-21', 'F', '5025552001', 'Zona 15, Ciudad Demo'),
-  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '2987654321099', 'Diego', 'Morales Demo', '1985-01-09', 'M', '5025552002', 'Zona 7, Ciudad Demo');
+  ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '2987654321099', 'Diego', 'Morales Demo', '1985-01-09', 'M', '5025552002', 'Zona 7, Ciudad Demo'),
+  ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '2987654321100', 'Jorge', 'Archivado Demo', '1970-05-05', 'M', '5025552003', 'Zona 2, Ciudad Demo'),
+  ('ffffffff-ffff-ffff-ffff-ffffffffffff', '2987654321101', 'Lucía', 'Menor Demo', '2018-06-15', 'F', '5025552004', 'Zona 6, Ciudad Demo');
 
-INSERT INTO expediente (id, paciente_id, estado) VALUES
-  ('e1111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'activo'),
-  ('e2222222-2222-2222-2222-222222222222', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'activo');
+INSERT INTO expediente (id, paciente_id, estado, motivo_archivo, archivado_en, version, extensiones) VALUES
+  ('e1111111-1111-1111-1111-111111111111', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'activo', NULL, NULL, 1, '{}'),
+  ('e2222222-2222-2222-2222-222222222222', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'activo', NULL, NULL, 1, '{}'),
+  ('e5555555-5555-5555-5555-555555555555', 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'archivado', 'Traslado a otra institución', '2026-08-15 10:00:00', 2, '{}'),
+  ('e6666666-6666-6666-6666-666666666666', 'ffffffff-ffff-ffff-ffff-ffffffffffff', 'activo', NULL, NULL, 2,
+   '{"tutorNombre":"Marta Demo","tutorTelefono":"5025552005"}');
 
 INSERT INTO catalogo_diagnostico (id, codigo, descripcion, sensible) VALUES
   ('d1111111-1111-1111-1111-111111111111', 'K02.1', 'Caries de la dentina', 0),
@@ -52,6 +57,13 @@ INSERT INTO consulta (id, expediente_id, medico_id, cita_id, ocurrida_en, motivo
 UPDATE cita
 SET consulta_id = 'a1111111-aaaa-1111-1111-111111111111'
 WHERE id = 'c1111111-1111-1111-1111-111111111111';
+
+INSERT INTO consulta (id, expediente_id, medico_id, cita_id, ocurrida_en, motivo, notas) VALUES
+  ('a6666666-aaaa-6666-6666-666666666666',
+   'e6666666-6666-6666-6666-666666666666',
+   '11111111-1111-1111-1111-111111111111',
+   NULL,
+   '2026-09-12 09:00:00', 'Primera revisión odontológica', 'Paciente menor de edad: dato restringido.');
 
 INSERT INTO diagnostico (id, consulta_id, catalogo_diagnostico_id, texto_libre, es_principal) VALUES
   ('b1111111-bbbb-1111-1111-111111111111',
@@ -113,4 +125,8 @@ INSERT INTO auditoria_acceso (id, actor_id, paciente_id, accion, recurso, detall
   ('a1111111-1111-1111-1111-111111111111',
    '11111111-1111-1111-1111-111111111111',
    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-   'lectura', 'odontograma', 'Apertura de odontograma (seed)');
+   'lectura', 'odontograma', 'Apertura de odontograma (seed)'),
+  ('a2222222-1111-2222-2222-222222222222',
+   '11111111-1111-1111-1111-111111111111',
+   'ffffffff-ffff-ffff-ffff-ffffffffffff',
+   'lectura', 'expediente', 'Apertura de expediente de menor (seed)');

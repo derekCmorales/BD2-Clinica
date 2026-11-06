@@ -1,0 +1,26 @@
+erDiagram
+  PACIENTE ||--|| EXPEDIENTE : tiene
+  EXPEDIENTE ||--o{ CONSULTA : registra
+  CONSULTA ||--o{ DIAGNOSTICO : agrega
+  CONSULTA ||--o{ RECETA : receta
+  EXPEDIENTE ||--o{ CITA : agenda
+  EVENTO }o--|| EXPEDIENTE : proyecta
+  PACIENTE {
+    uuid id PK
+    varchar dpi UK
+    varchar nombres
+    date fecha_nacimiento
+  }
+  EXPEDIENTE {
+    uuid id PK
+    uuid paciente_id UK
+    varchar estado
+    integer version
+    jsonb extensiones
+  }
+  EVENTO {
+    uuid aggregate_id PK
+    integer version PK
+    varchar tipo
+    jsonb payload
+  }

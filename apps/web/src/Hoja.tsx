@@ -597,7 +597,7 @@ function Agenda({ expediente, base, cerrado, ocupado, onEnviar }: AccionProps) {
           </Vacio>
         </div>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla desplazable">
           <table className="table">
             <thead>
               <tr>
@@ -1052,7 +1052,7 @@ function Crecimiento({ expediente, base, cerrado, ocupado, onEnviar }: AccionPro
           </Vacio>
         </div>
       ) : verTabla ? (
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla desplazable">
           <table className="table">
             <thead>
               <tr>
@@ -1162,7 +1162,7 @@ function Vacunas({ expediente, base, cerrado, ocupado, onEnviar }: AccionProps) 
           </Vacio>
         </div>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla desplazable">
           <table className="table">
             <thead>
               <tr>
@@ -1417,7 +1417,7 @@ function Accesos({ auditoria }: { auditoria: AuditoriaVista }) {
           </Vacio>
         </div>
       ) : (
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Tabla desplazable">
           <table className="table">
             <thead>
               <tr>

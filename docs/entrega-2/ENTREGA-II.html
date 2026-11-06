@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Entrega II — Aplicación cliente-servidor · Historiales clínicos</title>
+  <style>
+    :root {
+      --ink: #1a2332;
+      --muted: #5a6b7d;
+      --line: #d0d7de;
+      --bg: #ffffff;
+      --soft: #f6f8fa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0 auto;
+      max-width: 52rem;
+      padding: 2rem 1.5rem 4rem;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.55;
+      font-size: 11pt;
+    }
+    .cover {
+      text-align: center;
+      padding: 3rem 1rem 2.5rem;
+      border-bottom: 2px solid var(--ink);
+      margin-bottom: 2.5rem;
+      page-break-after: always;
+    }
+    .cover .uni { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85rem; color: var(--muted); }
+    .cover h1 { font-size: 1.75rem; margin: 1rem 0 0.5rem; }
+    .cover .meta { color: var(--muted); margin: 0.25rem 0; }
+    .howto {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      padding: 0.85rem 1rem;
+      margin-bottom: 2rem;
+      font-size: 0.9rem;
+    }
+    h1 { font-size: 1.45rem; margin-top: 0; }
+    h2 { font-size: 1.2rem; border-bottom: 1px solid var(--line); padding-bottom: 0.25rem; margin-top: 1.75rem; }
+    h3 { font-size: 1.05rem; margin-top: 1.25rem; }
+    section.doc-section {
+      margin-bottom: 2.5rem;
+      page-break-inside: avoid;
+    }
+    section.doc-section + section.doc-section {
+      border-top: 1px solid var(--line);
+      padding-top: 1.5rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0 1.25rem;
+      font-size: 0.92rem;
+    }
+    th, td {
+      border: 1px solid var(--line);
+      padding: 0.4rem 0.55rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--soft); }
+    code {
+      font-family: ui-monospace, "SF Mono", Consolas, monospace;
+      font-size: 0.88em;
+      background: var(--soft);
+      padding: 0.05em 0.3em;
+      border-radius: 3px;
+    }
+    pre {
+      background: var(--soft);
+      border: 1px solid var(--line);
+      padding: 0.75rem 1rem;
+      overflow-x: auto;
+      font-size: 0.85rem;
+    }
+    pre code { background: none; padding: 0; }
+    figure.diagram {
+      margin: 1.25rem 0;
+      text-align: center;
+      page-break-inside: avoid;
+    }
+    figure.diagram img {
+      max-width: 100%;
+      height: auto;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    figcaption {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.35rem;
+    }
+    ul, ol { padding-left: 1.35rem; }
+    a { color: #0b5fff; }
+    @media print {
+      body { max-width: none; padding: 0; font-size: 10pt; }
+      .howto { display: none; }
+      .cover { border-bottom-width: 1px; }
+      a { color: inherit; text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="cover">
+    <p class="uni">Universidad Rafael Landívar</p>
+    <p class="uni">Facultad de Ingeniería · Ingeniería en Informática y Sistemas</p>
+    <p class="uni">Bases de Datos II</p>
+    <h1>Entrega II — Aplicación cliente-servidor</h1>
+    <p class="meta">Plataforma de historiales clínicos · Red de cuatro instituciones</p>
+    <p class="meta">Hospital (PostgreSQL) · Odontología (MySQL) · Laboratorio (MongoDB) · Pediátrico (Redis)</p>
+  </header>
+
+  <aside class="howto">
+    <strong>Cómo armar el documento:</strong> abre este archivo en el navegador →
+    Cmd+A → Cmd+C → pega en Word o Google Docs. Los diagramas ya van como imagen.
+  </aside>
+
+  <section class="doc-section" id="00-contexto">
+<h1>Entrega II — Aplicación cliente-servidor</h1>
+<p>Plataforma de historiales clínicos para cuatro instituciones independientes. La misma</p>
+<p>lógica de negocio corre sobre cuatro motores distintos; el JWT decide a cuál se enruta</p>
+<p>cada operación.</p>
+<table><thead><tr><th>Institución</th><th>Motor</th><th>Rol del motor</th></tr></thead><tbody><tr><td>Hospital general</td><td>PostgreSQL</td><td>Event store + read model, integridad transaccional fuerte</td></tr><tr><td>Clínica odontológica</td><td>MySQL</td><td>CRUD InnoDB, operabilidad y hosting gestionado</td></tr><tr><td>Laboratorio clínico</td><td>MongoDB</td><td>Resultados con estructura variable por tipo de examen</td></tr><tr><td>Centro pediátrico</td><td>Redis</td><td>Sistema de registro (RedisJSON + ZSET), no caché</td></tr></tbody></table>
+<p><strong>Cómo leer este documento.</strong> Las secciones técnicas (modelado, consistencia, seguridad,</p>
+<p>evidencia) están completas y enlazan al código. Las secciones marcadas</p>
+<p><strong>«Redacción del estudiante»</strong> son las que decide y escribe el estudiante; el agente</p>
+<p>dejó la estructura, los hechos verificables y la evidencia, pero no redactó la</p>
+<p>justificación en su lugar.</p>
+<h2>Alcance</h2>
+<ul><li>Aplicación funcional cliente-servidor con los cuatro motores.</li><li>Enrutamiento por institución sin <code>if</code> por motor en los casos de uso.</li><li>Consultas equivalentes verificadas por la suite de contrato.</li><li>UI idéntica para las cuatro instituciones.</li><li>Seguridad: clasificación, auditoría consultable y privilegios mínimos.</li></ul>
+<h2>Fuera de alcance</h2>
+<p>Kafka, gRPC, microservicios, sagas, Firebase, Kubernetes. Redis Streams se evaluó en la</p>
+<p>fase 5 y se descartó para el proyector del Hospital (decisión A: proyector síncrono).</p>
+</section>
+
+<section class="doc-section" id="01-asignacion-motores">
+<h1>Asignación institución → motor</h1>
+<p>La restricción del enunciado exige un motor distinto por institución y al menos cuatro</p>
+<p>motores. La asignación implementada es:</p>
+<table><thead><tr><th>Institución</th><th>Motor</th><th>Hecho técnico verificable</th></tr></thead><tbody><tr><td>Hospital general</td><td>PostgreSQL</td><td>Event store <code>clinico.eventos</code> con <code>UNIQUE(aggregate_id, version)</code>, read model 3NF, <code>btree_gist</code> para citas sin solape</td></tr><tr><td>Clínica odontológica</td><td>MySQL</td><td>InnoDB <code>utf8mb4</code>, <code>SELECT ... FOR UPDATE</code> para reservar citas, odontograma en <code>pieza_dental</code></td></tr><tr><td>Laboratorio clínico</td><td>MongoDB</td><td>Colección <code>examenes</code> referenciada, <code>$jsonSchema</code> por tipo, índice <code>{ pacienteId: 1, fecha: -1 }</code></td></tr><tr><td>Centro pediátrico</td><td>Redis</td><td>RedisJSON <code>paciente:{id}</code>, ZSET <code>curva:{id}</code> y <code>vacunas:pendientes</code>, Lua para atomicidad</td></tr></tbody></table>
+<h2>Justificación (Redacción del estudiante — 3.1)</h2>
+<p>&gt; <strong>Pendiente.</strong> El estudiante redacta aquí por qué cada institución encaja con su motor</p>
+<p>&gt; a partir del volumen, la estructura de la información y la necesidad de transacciones</p>
+<p>&gt; estrictas. Los hechos técnicos de la tabla anterior son la evidencia disponible.</p>
+<p>Preguntas que la justificación debería responder:</p>
+<ol><li>¿Por qué el Hospital necesita transacciones fuertes y trazabilidad médico-legal?</li><li>¿Por qué la Clínica prioriza operabilidad sobre capacidades avanzadas?</li><li>¿Por qué la estructura variable del Laboratorio hace incómodo un modelo relacional?</li><li>¿Por qué el Pediátrico accede siempre por clave conocida y tolera una ventana de 1 s?</li></ol>
+</section>
+
+<section class="doc-section" id="02-modelado-por-motor">
+<h1>Modelado por motor</h1>
+<h2>Hospital general — PostgreSQL</h2>
+<p>Event store append-only y read model normalizado en el esquema <code>clinico</code>. El agregado</p>
+<p><code>Expediente</code> se reconstruye desde <code>clinico.eventos</code>; el read model se escribe en la misma</p>
+<p>transacción (decisión A de la fase 5).</p>
+<figure class="diagram"><img src="render/02-modelado-por-motor-1.png" alt="Diagrama 02-modelado-por-motor-1" /><figcaption>02-modelado-por-motor-1</figcaption></figure>
+<ul><li><code>UNIQUE(aggregate_id, version)</code> es la concurrencia optimista.</li><li><code>citas_sin_solape</code> usa <code>EXCLUDE USING gist (medico_id WITH =, tstzrange(inicio, fin) WITH &amp;&amp;)</code>.</li><li>El expediente se enmienda con eventos; nunca se hace <code>UPDATE</code> destructivo del historial.</li></ul>
+<h2>Clínica odontológica — MySQL</h2>
+<p>CRUD directo en InnoDB. El odontograma es una tabla por pieza FDI y un historial de</p>
+<p>procedimientos; la reserva de cita bloquea al médico con <code>SELECT ... FOR UPDATE</code>.</p>
+<figure class="diagram"><img src="render/02-modelado-por-motor-2.png" alt="Diagrama 02-modelado-por-motor-2" /><figcaption>02-modelado-por-motor-2</figcaption></figure>
+<ul><li><code>chk_pieza_fdi</code> valida cuadrante 1–4 y posición 1–8 (no el rango ingenuo 11–48).</li><li><code>auditoria_acceso</code> es append-only por privilegios: el usuario de app no tiene <code>UPDATE</code></li></ul>
+<p>  ni <code>DELETE</code> sobre ella.</p>
+<h2>Laboratorio clínico — MongoDB</h2>
+<p>El expediente es un documento; los exámenes van en una colección aparte y se referencian</p>
+<p>por <code>pacienteId</code>. Un paciente acumula cientos de exámenes y casi nunca se leen todos</p>
+<p>juntos; embeberlos choca con el límite de 16 MB de BSON.</p>
+<figure class="diagram"><img src="render/02-modelado-por-motor-3.png" alt="Diagrama 02-modelado-por-motor-3" /><figcaption>02-modelado-por-motor-3</figcaption></figure>
+<ul><li><code>$jsonSchema</code> con <code>oneOf</code> por tipo y <code>validationLevel: moderate</code>.</li><li>Índice mínimo <code>{ pacienteId: 1, fecha: -1 }</code>.</li><li>Antibiograma embebido como arreglo de <code>{ antibiotico, sensibilidad: S|I|R }</code>.</li></ul>
+<h2>Centro pediátrico — Redis</h2>
+<p>Redis es el sistema de registro, no una caché. Persistencia AOF <code>appendfsync everysec</code> +</p>
+<p>RDB; la caché transversal vive en otra instancia (DB lógica separada por proceso).</p>
+<figure class="diagram"><img src="render/02-modelado-por-motor-4.png" alt="Diagrama 02-modelado-por-motor-4" /><figcaption>02-modelado-por-motor-4</figcaption></figure>
+<ul><li>Lectura y escritura por clave conocida: <code>paciente:{id}</code>.</li><li><code>ZRANGEBYSCORE vacunas:pendientes -inf hoy</code> devuelve las dosis vencidas en una operación.</li><li>El script Lua hace atómico el read-modify-write del JSON y los ZSET.</li><li>Limitación: no hay consultas ad-hoc nativas (ver <code>08-limitaciones.md</code>).</li></ul>
+</section>
+
+<section class="doc-section" id="03-consistencia">
+<h1>Consistencia y concurrencia</h1>
+<h2>Estrategia de <code>guardar()</code> por motor</h2>
+<table><thead><tr><th>Motor</th><th>Estrategia</th><th>Archivo</th></tr></thead><tbody><tr><td>PostgreSQL</td><td><code>INSERT</code> de eventos nuevos; <code>UNIQUE(aggregate_id, version)</code> rechaza la versión repetida</td><td><a href="../../apps/api/src/infraestructura/postgres/postgres-expediente.repository.ts"><code>postgres-expediente.repository.ts</code></a></td></tr><tr><td>MySQL</td><td><code>UPDATE</code> dentro de transacción InnoDB; <code>SELECT ... FOR UPDATE</code> sobre la fila del expediente y del médico</td><td><a href="../../apps/api/src/infraestructura/mysql/mysql-expediente.repository.ts"><code>mysql-expediente.repository.ts</code></a></td></tr><tr><td>MongoDB</td><td><code>replaceOne</code> con <code>version</code> en el filtro (concurrencia optimista sobre el documento)</td><td><a href="../../apps/api/src/infraestructura/mongo/mongo-expediente.repository.ts"><code>mongo-expediente.repository.ts</code></a></td></tr><tr><td>Redis</td><td>Script Lua para read-modify-write atómico del JSON y los ZSET</td><td><a href="../../apps/api/src/infraestructura/redis/redis-expediente.repository.ts"><code>redis-expediente.repository.ts</code></a></td></tr></tbody></table>
+<p>La suite de contrato ejecuta el mismo escenario contra los cuatro adaptadores y verifica</p>
+<p>que la segunda escritura sobre la misma versión lanza <code>ConflictoDeConcurrencia</code>:</p>
+<p><a href="../../apps/api/src/infraestructura/contrato/contrato-repositorio.contrato.spec.ts"><code>contrato-repositorio.contrato.spec.ts</code></a>.</p>
+<h2>Proyector del Hospital — decisión A</h2>
+<p>El read model se actualiza <strong>en la misma transacción</strong> que el event store. No hay</p>
+<p>consumidor de Redis Streams; el <code>XADD</code> se eliminó para que el código y el diseño digan lo</p>
+<p>mismo. Consecuencias:</p>
+<ul><li>Consistencia fuerte: el médico ve el cambio inmediatamente después del commit.</li><li>La idempotencia es implícita: si la transacción falla, no se escribe ni el evento ni la</li></ul>
+<p>  proyección.</p>
+<ul><li>La reconstrucción se hace desde <code>clinico.eventos</code> con <code>pnpm hospital:reproyectar</code></li></ul>
+<p>  (<a href="../../scripts/hospital-reproyectar.sh"><code>scripts/hospital-reproyectar.sh</code></a>).</p>
+<ul><li>El test de reconstrucción vive en la suite de contrato y limpia las tablas derivadas</li></ul>
+<p>  antes de reproyectar.</p>
+<h2>Aislamiento y transacciones</h2>
+<ul><li><strong>PostgreSQL</strong>: cada <code>guardar()</code> abre <code>BEGIN</code>/<code>COMMIT</code>; la exclusión de citas y la</li></ul>
+<p>  unicidad de eventos son constraints de la base, no lógica de aplicación.</p>
+<ul><li><strong>MySQL</strong>: <code>REPEATABLE READ</code> (default de InnoDB) y <code>SELECT ... FOR UPDATE</code> para la fila</li></ul>
+<p>  del expediente y la del médico al reservar una cita.</p>
+<ul><li><strong>MongoDB</strong>: transacciones multi-documento sobre replica set de un nodo; el filtro por</li></ul>
+<p>  <code>version</code> evita pisar una escritura concurrente.</p>
+<ul><li><strong>Redis</strong>: el script Lua se ejecuta atómicamente en el servidor; no hay lectura y</li></ul>
+<p>  escritura separadas desde el cliente.</p>
+<h2>Trade-offs documentados</h2>
+<table><thead><tr><th>Motor</th><th>Trade-off</th></tr></thead><tbody><tr><td>PostgreSQL</td><td>El event store crece sin límite; no hay snapshots en esta entrega</td></tr><tr><td>MySQL</td><td>La simplicidad CRUD es deliberada; no hay historial de eventos</td></tr><tr><td>MongoDB</td><td>Las transacciones requieren replica set (configurado en Compose)</td></tr><tr><td>Redis</td><td>AOF <code>everysec</code> puede perder hasta ~1 s de escrituras ante un crash del proceso</td></tr></tbody></table>
+</section>
+
+<section class="doc-section" id="04-seguridad">
+<h1>Seguridad</h1>
+<h2>Clasificación de datos (AGENTS.md §8)</h2>
+<table><thead><tr><th>Nivel</th><th>Ejemplos</th><th>Tratamiento</th></tr></thead><tbody><tr><td>Público</td><td>Nombre de la institución, especialidades, horarios</td><td>Sin restricción</td></tr><tr><td>Confidencial</td><td>Nombre del paciente, teléfono, dirección, DPI</td><td>DPI enmascarado por defecto en la UI; no se escribe en logs</td></tr><tr><td>Restringido</td><td>Diagnósticos, resultados de laboratorio, datos de menores, VIH, salud mental</td><td>Toda lectura queda auditada; nunca se escribe en logs</td></tr></tbody></table>
+<p>La UI muestra <code>EtiquetaClasificacion</code> en las secciones restringidas y una insignia</p>
+<p>«Menor de edad» cuando corresponde. El DPI usa <code>DatoProtegido</code> con botón mostrar/ocultar.</p>
+<p>Revelar el DPI <strong>no</strong> genera auditoría: es confidencial, no restringido (decisión 2 de la</p>
+<p>fase 3).</p>
+<h2>Usuarios y privilegios por motor</h2>
+<table><thead><tr><th>Motor</th><th>Usuario de app</th><th>Privilegios</th><th>Verificación</th></tr></thead><tbody><tr><td>PostgreSQL</td><td><code>hospital_app</code></td><td><code>SELECT/INSERT/UPDATE</code> en <code>clinico.*</code>; <code>UPDATE/DELETE/TRUNCATE</code> revocados en <code>auditoria_acceso</code> y <code>eventos</code></td><td><code>pnpm verificar:privilegios</code></td></tr><tr><td>MySQL</td><td><code>odontologia_app</code></td><td><code>SELECT/INSERT</code> en toda la base; <code>UPDATE</code> tabla por tabla; sin <code>DELETE</code> ni DDL</td><td><code>pnpm verificar:privilegios</code></td></tr><tr><td>MongoDB</td><td><code>laboratorio_app</code></td><td><code>readWrite</code> solo sobre <code>laboratorio</code>; sin <code>dbAdmin</code> ni <code>root</code></td><td><code>pnpm verificar:privilegios</code></td></tr><tr><td>Redis</td><td><code>pediatrico_app</code></td><td><code>+@all -@dangerous</code>; <code>FLUSHALL</code>, <code>CONFIG</code> y <code>KEYS</code> denegados</td><td><code>pnpm verificar:privilegios</code></td></tr></tbody></table>
+<p>Evidencia local:</p>
+<pre><code class="lang-text">==&gt; PostgreSQL · hospital_app
+   ✓ auditoría append-only: UPDATE denegado
+   ✓ auditoría append-only: DELETE denegado
+==&gt; MySQL · odontologia_app
+   ✓ auditoría append-only: UPDATE denegado
+   ✓ auditoría append-only: DELETE denegado
+==&gt; MongoDB · laboratorio_app
+   ✓ rol readWrite limitado a su base (sin dbAdmin ni root)
+==&gt; Redis · pediatrico_app
+   ✓ FLUSHALL denegado por ACL
+   ✓ CONFIG denegado por ACL
+privilegios: mínimo por institución verificado</code></pre>
+<h2>Auditoría consultable</h2>
+<ul><li>Puerto de escritura <code>AuditLog</code> y puerto de lectura <code>ConsultaDeAuditoria</code> (decisión 1 de</li></ul>
+<p>  la fase 3: puerto nuevo, separado como <code>ExpedienteQueryService</code>).</p>
+<ul><li>Endpoint <code>GET /pacientes/:pacienteId/auditoria</code> devuelve solo metadatos: actor, acción,</li></ul>
+<p>  recurso y fecha. Nunca el payload clínico.</p>
+<ul><li>Panel «Accesos» en el expediente, con la bitácora ordenada de más reciente a más antigua.</li><li>La lectura de la auditoría no se audita para no crear recursión: la bitácora no es un</li></ul>
+<p>  dato clínico restringido.</p>
+<h2>Logs</h2>
+<ul><li>El filtro de errores registra solo el nombre de la clase, nunca el mensaje ni el payload.</li><li>Un test intercepta <code>Logger</code> y falla si una llamada interpola campos restringidos:</li></ul>
+<p>  <a href="../../apps/api/src/infraestructura/http/registro-seguro.spec.ts"><code>registro-seguro.spec.ts</code></a>.</p>
+<ul><li>Los datos de prueba son 100 % sintéticos; <code>.env</code> e <code>infra/mongo/keyfile</code> están ignorados</li></ul>
+<p>  por git.</p>
+</section>
+
+<section class="doc-section" id="05-embeber-vs-referenciar">
+<h1>Embeber vs referenciar</h1>
+<h2>MongoDB — Laboratorio</h2>
+<table><thead><tr><th>Dato</th><th>Decisión</th><th>Razón técnica</th></tr></thead><tbody><tr><td>Expediente, consultas, diagnósticos, recetas, citas, mediciones, vacunas, piezas</td><td>Embebido en el documento <code>expedientes</code></td><td>Se leen juntos al abrir el expediente y son un conjunto acotado</td></tr><tr><td>Resultados de examen</td><td>Referenciados en la colección <code>examenes</code></td><td>Un paciente acumula cientos; embeberlos choca con el límite de 16 MB de BSON y casi nunca se leen todos juntos</td></tr><tr><td>Antibiograma</td><td>Embebido dentro del resultado de cultivo</td><td>Es pequeño y se lee siempre con el cultivo; se modela como arreglo de <code>{ antibiotico, sensibilidad }</code></td></tr><tr><td>Auditoría</td><td>Colección aparte <code>auditoria</code></td><td>Append-only, no forma parte del agregado clínico</td></tr></tbody></table>
+<p>Índice mínimo: <code>{ pacienteId: 1, fecha: -1 }</code>. Validación por tipo con <code>$jsonSchema</code> y</p>
+<p><code>validationLevel: moderate</code> para no invalidar documentos viejos al endurecer el esquema.</p>
+<h2>Redis — Centro pediátrico</h2>
+<table><thead><tr><th>Dato</th><th>Estructura</th><th>Razón técnica</th></tr></thead><tbody><tr><td>Expediente</td><td>RedisJSON <code>paciente:{id}</code></td><td>Acceso siempre por clave conocida; lectura completa en una operación</td></tr><tr><td>Curva de crecimiento</td><td>ZSET <code>curva:{id}</code> con score = fecha</td><td>Orden cronológico y rangos por fecha sin ordenar en la aplicación</td></tr><tr><td>Esquema de vacunación</td><td>ZSET <code>vacunas:{id}</code> con score = próxima dosis</td><td><code>ZRANGEBYSCORE</code> devuelve dosis vencidas</td></tr><tr><td>Dosis pendientes globales</td><td>ZSET <code>vacunas:pendientes</code> con member `pacienteId</td><td>codigo`</td><td>Una sola operación para todas las dosis vencidas</td></tr><tr><td>Índice de búsqueda</td><td>HASH <code>indice:pacientes</code></td><td>Búsqueda por nombre sin consultas ad-hoc nativas</td></tr><tr><td>Auditoría</td><td>STREAM <code>auditoria:{id}</code></td><td>Append-only y lectura por rango</td></tr></tbody></table>
+<h2>Justificación (Redacción del estudiante — 3.2)</h2>
+<p>&gt; <strong>Pendiente.</strong> El estudiante redacta aquí el criterio explícito de embeber vs referenciar</p>
+<p>&gt; y lo conecta con el volumen, la frecuencia de lectura y los límites del motor. Los</p>
+<p>&gt; hechos técnicos de las tablas anteriores son la evidencia disponible.</p>
+</section>
+
+<section class="doc-section" id="06-hallazgos">
+<h1>Hallazgos comparativos y conclusiones</h1>
+<p>&gt; <strong>Redacción del estudiante — 3.3.</strong> Esta sección la escribe el estudiante. El agente</p>
+<p>&gt; dejó la tabla vacía y la evidencia que puede sustentar cada hallazgo.</p>
+<table><thead><tr><th>#</th><th>Hallazgo</th><th>Motor(es)</th><th>Evidencia</th></tr></thead><tbody><tr><td>1</td><td></td><td></td><td></td></tr><tr><td>2</td><td></td><td></td><td></td></tr><tr><td>3</td><td></td><td></td><td></td></tr><tr><td>4</td><td></td><td></td><td></td></tr></tbody></table>
+<p>Evidencia disponible para citar:</p>
+<ul><li><code>docs/entrega-2/evidencia-contrato.md</code> — 35 escenarios verdes por motor, incluida la</li></ul>
+<p>  escritura concurrente y la reconstrucción del read model.</p>
+<ul><li><code>docs/entrega-2/capturas/</code> — flujo completo en escritorio y móvil para las cuatro</li></ul>
+<p>  instituciones.</p>
+<ul><li><code>pnpm verificar:privilegios</code> — privilegios mínimos por motor.</li><li><code>pnpm hospital:reproyectar</code> — reconstrucción desde <code>clinico.eventos</code>.</li></ul>
+</section>
+
+<section class="doc-section" id="07-correcciones-entrega-1">
+<h1>Correcciones a partir de la retroalimentación de Entrega I</h1>
+<p>&gt; <strong>Redacción del estudiante — 3.4.</strong> El estudiante redacta la narrativa de qué se corrigió</p>
+<p>&gt; y por qué. Los cambios técnicos ya implementados son:</p>
+<table><thead><tr><th>Corrección</th><th>Dónde</th></tr></thead><tbody><tr><td><code>$jsonSchema</code> de Mongo usaba <code>const</code>, palabra no soportada; se reemplazó por <code>enum</code> y se alineó con el catálogo</td><td><code>apps/api/src/infraestructura/mongo/migrations/001_esquema.js</code>, <code>002_examenes_catalogo.js</code></td></tr><tr><td>MySQL otorgaba <code>ALL PRIVILEGES</code> por el entrypoint; se redujo a DML mínimo y auditoría append-only</td><td><code>apps/api/src/infraestructura/mysql/migrations/002_privilegios.sql</code></td></tr><tr><td><code>chk_pieza_fdi</code> aceptaba 19, 20, 29, 30, 39 y 40; ahora valida cuadrante 1–4 y posición 1–8</td><td><code>apps/api/src/infraestructura/mysql/migrations/003_check_fdi.sql</code></td></tr><tr><td>PostgreSQL no tenía event store ni exclusión de citas; se agregaron <code>clinico.eventos</code> y <code>citas_sin_solape</code></td><td><code>apps/api/src/infraestructura/postgres/migrations/003_event_store.sql</code></td></tr><tr><td>Redis sustituyó a Firebase para el centro pediátrico (pendiente de autorización del catedrático)</td><td><code>docker-compose.yml</code>, <code>AGENTS.md</code> §3</td></tr><tr><td>La UI duplicaba los campos de examen; ahora los consume del catálogo</td><td><code>apps/web/src/Hoja.tsx</code>, <code>GET /catalogos/examenes</code></td></tr></tbody></table>
+</section>
+
+<section class="doc-section" id="08-limitaciones">
+<h1>Limitaciones conocidas</h1>
+<table><thead><tr><th>Limitación</th><th>Motor</th><th>Impacto</th><th>Mitigación</th></tr></thead><tbody><tr><td>Sin consultas ad-hoc nativas; «todos los niños con percentil bajo 3» requiere reindexar o RediSearch</td><td>Redis</td><td>Consultas analíticas fuera del acceso por clave</td><td>Índice <code>indice:pacientes</code> para búsqueda por nombre; documentado como trade-off</td></tr><tr><td>AOF <code>appendfsync everysec</code> puede perder hasta ~1 s de escrituras ante un crash</td><td>Redis</td><td>Ventana de pérdida acotada</td><td>RDB + AOF; trade-off documentado en Compose y AGENTS.md</td></tr><tr><td>El solape de citas entre pacientes distintos solo se valida en Postgres, MySQL y Mongo</td><td>Redis</td><td>Dos pacientes del Pediátrico podrían reservar el mismo horario del mismo médico</td><td>La suite de contrato lo marca como capacidad no soportada; se documenta en la evidencia</td></tr><tr><td>Las transacciones multi-documento requieren replica set</td><td>MongoDB</td><td>Sin replica set no hay transacción</td><td>Compose configura <code>rs0</code> con un nodo y keyfile</td></tr><tr><td>El event store crece sin snapshots</td><td>PostgreSQL</td><td>Reconstrucción más lenta con muchos eventos</td><td><code>pnpm hospital:reproyectar</code>; snapshots fuera de alcance</td></tr><tr><td>Sin RBAC por roles</td><td>Todos</td><td>El JWT identifica institución, no permisos finos</td><td>Fuera de alcance de la Entrega II</td></tr><tr><td>Sin cifrado a nivel de campo</td><td>Todos</td><td>Datos en reposo dependen del motor/host</td><td>Fuera de alcance de la Entrega II</td></tr></tbody></table>
+</section>
+
+<section class="doc-section" id="09-evidencia">
+<h1>Evidencia</h1>
+<h2>Comandos</h2>
+<table><thead><tr><th>Comando</th><th>Qué demuestra</th><th>Último resultado</th></tr></thead><tbody><tr><td><code>pnpm test</code></td><td>Unitarias del dominio, casos de uso, validación y logs</td><td>3 suites, 15 tests verdes</td></tr><tr><td><code>pnpm test:contrato</code></td><td>35 escenarios contra memoria, PostgreSQL, MySQL, MongoDB y Redis</td><td>35/35 verdes; ver <code>evidencia-contrato.md</code></td></tr><tr><td><code>pnpm e2e:rapido</code></td><td>Flujo completo en navegador con los adaptadores en memoria, escritorio y móvil</td><td>14/14 verdes</td></tr><tr><td><code>pnpm e2e:motores</code></td><td>El mismo flujo contra los cuatro motores reales</td><td>14/14 verdes; reporte en <code>e2e/reporte/</code></td></tr><tr><td><code>pnpm verificar:arquitectura</code></td><td><code>dominio/</code> sin imports de infraestructura</td><td>verde</td></tr><tr><td><code>pnpm verificar:privilegios</code></td><td>Privilegios mínimos y auditoría append-only por motor</td><td>verde</td></tr><tr><td><code>pnpm hospital:reproyectar</code></td><td>Reconstrucción del read model desde <code>clinico.eventos</code></td><td>verde</td></tr><tr><td><code>pnpm build</code></td><td>API y cliente compilan</td><td>verde</td></tr></tbody></table>
+<h2>Archivos</h2>
+<ul><li><a href="evidencia-contrato.md"><code>evidencia-contrato.md</code></a> — tabla por motor y escenario.</li><li><a href="capturas/"><code>capturas/</code></a> — capturas de escritorio y móvil para las cuatro instituciones.</li><li><a href="../../apps/api/src/infraestructura/contrato/contrato-repositorio.contrato.spec.ts"><code>../../apps/api/src/infraestructura/contrato/contrato-repositorio.contrato.spec.ts</code></a> — suite de contrato.</li><li><a href="../../e2e/pruebas/flujo-clinico.spec.ts"><code>../../e2e/pruebas/flujo-clinico.spec.ts</code></a> — flujo parametrizado ×4.</li><li><a href="../../.github/workflows/ci.yml"><code>../../.github/workflows/ci.yml</code></a> — CI con unitarias, contrato y e2e.</li></ul>
+<h2>Cómo regenerar</h2>
+<pre><code class="lang-bash">pnpm preparar
+pnpm db:migrate
+pnpm db:seed
+pnpm test:contrato
+pnpm e2e:motores
+pnpm docs:entrega-2:full</code></pre>
+</section>
+
+<section class="doc-section" id="10-matriz-cobertura">
+<h1>Matriz de cobertura — Entrega II</h1>
+<table><thead><tr><th>Resultado esperado (LINEAMIENTOS)</th><th>Evidencia</th></tr></thead><tbody><tr><td>Aplicación funcional</td><td><code>pnpm e2e:rapido</code> (14/14) y <code>pnpm e2e:motores</code> (14/14); capturas en <code>capturas/</code></td></tr><tr><td>Conexión cliente-servidor</td><td><a href="../../apps/web/src/api.ts"><code>apps/web/src/api.ts</code></a>, <a href="../../apps/web/vite.config.ts"><code>apps/web/vite.config.ts</code></a>, <a href="../../apps/api/src/infraestructura/http/sesion.controller.ts"><code>sesion.controller.ts</code></a></td></tr><tr><td>Modelado corregido según retroalimentación</td><td><a href="07-correcciones-entrega-1.md"><code>07-correcciones-entrega-1.md</code></a>; migraciones <code>postgres/003</code>, <code>mysql/002-004</code>, <code>mongo/001-002</code></td></tr><tr><td>Consultas equivalentes en los 4 motores</td><td><code>pnpm test:contrato</code> → <a href="evidencia-contrato.md"><code>evidencia-contrato.md</code></a> (35 escenarios)</td></tr><tr><td>Modelo documental Mongo/Redis justificado</td><td><a href="05-embeber-vs-referenciar.md"><code>05-embeber-vs-referenciar.md</code></a>, <a href="02-modelado-por-motor.md"><code>02-modelado-por-motor.md</code></a></td></tr><tr><td>UI ordenada e idéntica para los 4 motores</td><td><a href="../design-system/README.md"><code>docs/design-system/README.md</code></a>; <code>e2e/pruebas/flujo-clinico.spec.ts</code> ×4</td></tr><tr><td>Registro de paciente nuevo</td><td><code>e2e/pruebas/flujo-clinico.spec.ts</code>; <a href="../../apps/api/src/aplicacion/crear-paciente-nuevo.ts"><code>crear-paciente-nuevo.ts</code></a></td></tr><tr><td>Mantenimiento: consultas, diagnósticos, tratamientos, recetas</td><td><code>e2e</code> flujo ×4; <code>aplicacion/registrar-consulta.ts</code>, <code>agregar-diagnostico.ts</code>, <code>recetar-medicamento.ts</code>, <code>casos-seguimiento.ts</code></td></tr><tr><td>Archivo/desactivación con motivo</td><td><code>e2e</code> flujo ×4; <a href="../../apps/api/src/aplicacion/archivar-expediente.ts"><code>archivar-expediente.ts</code></a></td></tr><tr><td>Enrutamiento por usuario sin reescribir lógica</td><td><a href="../../apps/api/src/infraestructura/routing/enrutador-de-motor.ts"><code>enrutador-de-motor.ts</code></a>; <code>e2e/pruebas/aislamiento.spec.ts</code></td></tr><tr><td>Documento comparativo</td><td><a href="ENTREGA-II.html"><code>ENTREGA-II.html</code></a> / <a href="README.md"><code>README.md</code></a></td></tr></tbody></table>
+<h2>Reglas de AGENTS.md</h2>
+<table><thead><tr><th>Regla</th><th>Evidencia</th></tr></thead><tbody><tr><td><code>dominio/</code> sin infraestructura</td><td><code>pnpm verificar:arquitectura</code></td></tr><tr><td>Sin <code>if</code> por institución/motor en <code>aplicacion/</code></td><td>revisión de <code>apps/api/src/aplicacion/</code>; el enrutamiento vive en <code>infraestructura/routing/</code></td></tr><tr><td>Cada <code>guardar()</code> documenta su estrategia</td><td>comentarios de los cuatro adaptadores + <a href="03-consistencia.md"><code>03-consistencia.md</code></a></td></tr><tr><td>Ningún dato restringido en logs</td><td><code>registro-seguro.spec.ts</code></td></tr><tr><td>Acceso restringido auditado y consultable</td><td><code>GET /pacientes/:id/auditoria</code>, panel «Accesos», <code>e2e</code></td></tr><tr><td>Privilegios mínimos por institución</td><td><code>pnpm verificar:privilegios</code></td></tr><tr><td>Redis AOF <code>everysec</code> + RDB y trade-off de 1 s</td><td><code>docker-compose.yml</code>, <a href="08-limitaciones.md"><code>08-limitaciones.md</code></a></td></tr><tr><td>Datos sintéticos, sin secretos versionados</td><td>seeds de los 4 motores; <code>.env</code> e <code>infra/mongo/keyfile</code> en <code>.gitignore</code></td></tr><tr><td>Nada fuera de alcance</td><td>sin Kafka, gRPC, sagas, Firebase ni Kubernetes</td></tr></tbody></table>
+<h2>Calidad y CI</h2>
+<table><thead><tr><th>Ítem</th><th>Evidencia</th></tr></thead><tbody><tr><td><code>pnpm test</code></td><td>3 suites, 15 tests</td></tr><tr><td><code>pnpm test:contrato</code></td><td>35/35</td></tr><tr><td><code>pnpm e2e:motores</code></td><td>14/14, escritorio y móvil</td></tr><tr><td>axe sin violaciones serias/críticas</td><td><code>revisarAccesibilidad</code> en ingreso, censo, pestañas y diálogos</td></tr><tr><td><code>pnpm build</code></td><td>API + web</td></tr><tr><td>GitHub Actions</td><td><a href="../../.github/workflows/ci.yml"><code>.github/workflows/ci.yml</code></a></td></tr></tbody></table>
+<h2>Pendiente de decisión/redacción del estudiante</h2>
+<ul><li>Fase 8, secciones 3.1–3.4: justificación institución→motor, embeber vs referenciar,</li></ul>
+<p>  hallazgos y correcciones. El andamiaje y la evidencia están listos.</p>
+<ul><li>Tag <code>entrega-2</code>: se crea solo con confirmación del estudiante.</li></ul>
+</section>
+
+<section class="doc-section" id="11-guion-demo">
+<h1>Guion de demo — 10 minutos</h1>
+<h2>Antes de empezar (1 min)</h2>
+<pre><code class="lang-bash">pnpm install
+pnpm demo</code></pre>
+<p>Abrir <code>http://localhost:5173</code> y <code>http://localhost:3000/docs</code>. Clave: <code>demo</code>.</p>
+<h2>1. Hospital general — PostgreSQL (2 min)</h2>
+<ul><li>Ingresar como <strong>Hospital general</strong>.</li><li>Abrir <strong>Carlos Ruiz Demo</strong>: 3 exámenes (hematología, orina, cultivo), una consulta con</li></ul>
+<p>  diagnóstico y receta, y dos citas.</p>
+<ul><li>Mostrar la pestaña <strong>Accesos</strong>: la lectura del expediente quedó auditada.</li><li>Abrir <strong>Lucía Menor Demo</strong>: insignia «Menor de edad» y tutor.</li><li>Abrir <strong>Jorge Archivado Demo</strong>: solo lectura y motivo de archivo.</li><li>Mencionar: el expediente se enmienda con eventos; <code>pnpm hospital:reproyectar</code> reconstruye</li></ul>
+<p>  el read model desde <code>clinico.eventos</code>.</p>
+<h2>2. Clínica odontológica — MySQL (2 min)</h2>
+<ul><li>Ingresar como <strong>Clínica odontológica</strong>.</li><li>Abrir <strong>Sofía García Demo</strong> → <strong>Odontograma</strong>: 32 piezas con estados (caries, obturado,</li></ul>
+<p>  ausente).</p>
+<ul><li>Cambiar una pieza y registrar un procedimiento.</li><li>Mencionar: <code>SELECT ... FOR UPDATE</code> evita dos citas del mismo médico a la misma hora.</li></ul>
+<h2>3. Laboratorio clínico — MongoDB (2 min)</h2>
+<ul><li>Ingresar como <strong>Laboratorio clínico</strong>.</li><li>Abrir <strong>Luis Pérez Demo</strong> → <strong>Laboratorio</strong>: tres tipos con estructuras distintas.</li><li>Registrar una hematología nueva; mostrar que el formulario sale del catálogo</li></ul>
+<p>  <code>GET /catalogos/examenes</code>.</p>
+<ul><li>Mostrar la tarjeta con un valor fuera de rango marcado <strong>alto/bajo</strong> y el antibiograma</li></ul>
+<p>  embebido del cultivo.</p>
+<ul><li>Mencionar: exámenes referenciados, no embebidos (16 MB de BSON).</li></ul>
+<h2>4. Centro pediátrico — Redis (2 min)</h2>
+<ul><li>Ingresar como <strong>Centro pediátrico</strong>.</li><li>Abrir <strong>Ana Hernández Demo</strong> → <strong>Crecimiento</strong>: 6 mediciones y gráfica.</li><li><strong>Vacunas</strong>: una dosis vencida (SRP) y una próxima (DPT).</li><li>Registrar una medición nueva.</li><li>Mencionar: Redis es sistema de registro (AOF everysec + RDB); se puede perder hasta ~1 s.</li></ul>
+<h2>5. Contraste y cierre (1 min)</h2>
+<ul><li>Mostrar la tabla de <code>guardar()</code> en <a href="03-consistencia.md"><code>03-consistencia.md</code></a>: eventos,</li></ul>
+<p>  transacción con <code>FOR UPDATE</code>, <code>replaceOne</code> con versión y Lua atómico.</p>
+<ul><li>Mostrar <code>pnpm test:contrato</code> y el reporte por motor.</li><li>Cerrar con la limitación de Redis (sin consultas ad-hoc) y la nota Firebase→Redis.</li></ul>
+</section>
+</body>
+</html>

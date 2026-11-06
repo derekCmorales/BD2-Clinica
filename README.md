@@ -1,41 +1,66 @@
 # Historiales clínicos — Bases de Datos II (URL)
 
 Plataforma de historiales para cuatro instituciones, cada una con un motor distinto.
+La misma lógica de negocio y la misma UI corren sobre los cuatro; el JWT decide el motor.
 
-| Institución | Motor |
-|---|---|
-| Hospital general | PostgreSQL |
-| Clínica odontológica | MySQL |
-| Laboratorio clínico | MongoDB |
-| Centro pediátrico | Redis (registro; no caché) |
+| Institución | Motor | Rol |
+|---|---|---|
+| Hospital general | PostgreSQL | Event store + read model, integridad fuerte |
+| Clínica odontológica | MySQL | CRUD InnoDB, odontograma |
+| Laboratorio clínico | MongoDB | Resultados con estructura variable por tipo |
+| Centro pediátrico | Redis | Sistema de registro (RedisJSON + ZSET), no caché |
 
-## Arranque rápido
+## Arranque en 5 comandos
 
 ```bash
-pnpm preparar           # .env + keyfile de Mongo (ninguno se versiona)
 pnpm install
-docker compose up -d
-pnpm db:migrate         # aplica solo las migraciones pendientes (tabla schema_migrations)
-pnpm db:seed            # destructivo: datos sintéticos
-pnpm verificar:entrega-1
-pnpm verificar:arquitectura   # dominio/ sin imports de infraestructura
-pnpm dev:api   # http://localhost:3000/salud  (PERSISTENCIA=memoria por defecto)
-pnpm dev:web   # http://localhost:5173  — misma UI para las cuatro instituciones
-pnpm test
+pnpm preparar          # .env + keyfile de Mongo (ninguno se versiona)
+pnpm demo              # motores + migraciones + seeds + API + cliente
 ```
 
-OpenAPI: `http://localhost:3000/docs`. Clave de laboratorio: `demo` (`DEMO_CLAVE`).
+Abre `http://localhost:5173`, elige institución y usa la clave **`demo`**.
+OpenAPI: `http://localhost:3000/docs`.
 
-Con los motores reales: `PERSISTENCIA=motores` en `.env`, Docker arriba, y `pnpm db:migrate`.
+`pnpm demo` deja los contenedores arriba al salir; para apagarlos:
+`docker compose down`.
 
-Documentación Entrega I: [`docs/entrega-1/`](docs/entrega-1/).
-
-Documento único listo para copiar/pegar a Word: [`docs/entrega-1/ENTREGA-I.html`](docs/entrega-1/ENTREGA-I.html)
+### Arranque manual
 
 ```bash
-pnpm docs:entrega-1:full   # regenera PNG + HTML
-open docs/entrega-1/ENTREGA-I.html
+pnpm preparar
+docker compose up -d --wait postgres mysql mongo redis-pediatrico redis-cache
+docker compose up -d mongo-init-replica
+pnpm db:migrate
+pnpm db:seed
+PERSISTENCIA=motores pnpm dev:api
+pnpm dev:web
 ```
+
+Sin Docker, `PERSISTENCIA=memoria` (default) usa los cuatro adaptadores en proceso.
+
+## Verificación
+
+```bash
+pnpm test                    # unitarias (sin Docker)
+pnpm test:contrato           # 35 escenarios contra los 4 motores reales
+pnpm e2e:rapido              # Playwright en memoria, escritorio y móvil
+pnpm e2e:motores             # Playwright contra los 4 motores reales
+pnpm verificar:arquitectura  # dominio/ sin imports de infraestructura
+pnpm verificar:privilegios   # privilegios mínimos y auditoría append-only
+pnpm hospital:reproyectar    # reconstruye el read model desde clinico.eventos
+pnpm build
+```
+
+Evidencia de contrato: [`docs/entrega-2/evidencia-contrato.md`](docs/entrega-2/evidencia-contrato.md).
+Capturas e2e: [`docs/entrega-2/capturas/`](docs/entrega-2/capturas/).
+
+## Documento comparativo
+
+- Índice: [`docs/entrega-2/README.md`](docs/entrega-2/README.md)
+- HTML listo para Word/Google Docs: [`docs/entrega-2/ENTREGA-II.html`](docs/entrega-2/ENTREGA-II.html)
+- Regenerar: `pnpm docs:entrega-2:full`
+- Guion de demo: [`docs/entrega-2/11-guion-demo.md`](docs/entrega-2/11-guion-demo.md)
+- Matriz de cobertura: [`docs/entrega-2/10-matriz-cobertura.md`](docs/entrega-2/10-matriz-cobertura.md)
 
 ## Puertos (solo 127.0.0.1)
 
@@ -58,36 +83,37 @@ Los usuarios de init (`01-roles.sh`, `01-usuario-app.js`) solo se crean con volu
 ```
 apps/api/          NestJS hexagonal (dominio / aplicacion / infraestructura)
 apps/web/          Cliente React (misma UI para las cuatro instituciones)
-docs/entrega-1/    Entregable académico
+e2e/               Playwright: flujo ×4, aislamiento, sesión, concurrencia, axe
+docs/entrega-1/    Entregable académico anterior
+docs/entrega-2/    Documento comparativo, evidencia y capturas
 docs/design-system/ Tokens, componentes y capturas del cliente
-openspec/          Fases pendientes hasta la entrega final (OpenSpec)
+openspec/          Changes de la Entrega II
 infra/             Init de Compose (roles, charset, redis)
-scripts/           migrate, seed, verificar, mermaid
+scripts/           demo, migrate, seed, contrato, e2e, verificación
 ```
 
-## Hoja de ruta (OpenSpec)
-
-Cada fase hasta la entrega final es un change abierto en [`openspec/changes/`](openspec/changes/).
-Las tareas marcadas `[DECISIÓN]` esperan una decisión de modelado del estudiante.
-Checklist de cierre: [`docs/CHECKLIST-ENTREGA.md`](docs/CHECKLIST-ENTREGA.md) · prompt del agente de cierre: [`openspec/GOAL-CIERRE.md`](openspec/GOAL-CIERRE.md).
+## OpenSpec
 
 ```bash
-npx @fission-ai/openspec@1.16.0 list       # progreso por fase
+npx @fission-ai/openspec@1.16.0 list
 npx @fission-ai/openspec@1.16.0 validate --all
 ```
 
 | Fase | Change | Estado |
 |---|---|---|
-| 1 | `fase-1-design-system` | Aprobado y archivado |
-| 2 | `fase-2-pantallas-clinicas` | Aprobado y archivado |
-| 3 | `fase-3-seguridad-visible` | UI hecha · bitácora pendiente de decisión |
-| 4 | `fase-4-contrato-adaptadores` | Pendiente |
-| 5 | `fase-5-proyector-read-model` | Pendiente de decisión |
-| 6 | `fase-6-laboratorio-por-tipo` | Pendiente de decisión |
-| 7 | `fase-7-pruebas-e2e` | Pendiente |
-| 8 | `fase-8-documento-comparativo` | Pendiente |
-| 9 | `fase-9-entrega-final` | Pendiente |
+| 1 | `fase-1-design-system` | Archivado |
+| 2 | `fase-2-pantallas-clinicas` | Archivado |
+| 3 | `fase-3-seguridad-visible` | Aplicado y archivado |
+| 4 | `fase-4-contrato-adaptadores` | Aplicado y archivado |
+| 5 | `fase-5-proyector-read-model` | Aplicado y archivado |
+| 6 | `fase-6-laboratorio-por-tipo` | Aplicado y archivado |
+| 7 | `fase-7-pruebas-e2e` | Aplicado y archivado |
+| 8 | `fase-8-documento-comparativo` | Andamiaje completo; redacción del estudiante pendiente (3.1–3.4) |
+| 9 | `fase-9-entrega-final` | Aplicado y archivado |
+
+Checklist de cierre: [`docs/CHECKLIST-ENTREGA.md`](docs/CHECKLIST-ENTREGA.md).
 
 ## Nota Redis vs Firebase
 
-Firebase del enunciado se sustituye por Redis para pediatría. Pendiente de autorización del catedrático; el rollback es un adaptador.
+Firebase del enunciado se sustituye por Redis para pediatría. Pendiente de autorización
+del catedrático; el rollback es un adaptador.

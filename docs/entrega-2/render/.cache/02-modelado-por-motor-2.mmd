@@ -1,0 +1,15 @@
+erDiagram
+  PACIENTE ||--|| EXPEDIENTE : tiene
+  EXPEDIENTE ||--o{ CONSULTA : registra
+  CONSULTA ||--o{ DIAGNOSTICO : agrega
+  CONSULTA ||--o{ RECETA : receta
+  EXPEDIENTE ||--o{ CITA : agenda
+  EXPEDIENTE ||--o{ PIEZA_DENTAL : odontograma
+  PIEZA_DENTAL ||--o{ PROCEDIMIENTO_DENTAL : historial
+  CONSULTA ||--o{ PROCEDIMIENTO_DENTAL : registra
+  PIEZA_DENTAL {
+    char id PK
+    char expediente_id FK
+    smallint codigo_fdi
+    varchar estado
+  }

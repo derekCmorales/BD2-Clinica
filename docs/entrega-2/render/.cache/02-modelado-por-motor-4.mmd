@@ -1,0 +1,6 @@
+flowchart LR
+  P["paciente:{id}<br/>RedisJSON"] --> I["indice:pacientes<br/>HASH nombre"]
+  P --> C["curva:{id}<br/>ZSET score=fecha"]
+  P --> V["vacunas:{id}<br/>ZSET score=próxima dosis"]
+  V --> D["vacunas:pendientes<br/>ZSET global"]
+  P --> A["auditoria:{id}<br/>STREAM"]

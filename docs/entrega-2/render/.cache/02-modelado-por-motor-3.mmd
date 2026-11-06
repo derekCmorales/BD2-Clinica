@@ -1,0 +1,7 @@
+flowchart LR
+  E[expedientes<br/>pacienteId único] -->|pacienteId| X[examenes<br/>tipoExamen + fecha]
+  X --> H[hematologia<br/>5 campos]
+  X --> O[orina<br/>7 campos]
+  X --> C[cultivo<br/>muestra, organismo, UFC, antibiograma]
+  X --> T[otro<br/>descripción]
+  A[auditoria<br/>append-only] -->|pacienteId| E
