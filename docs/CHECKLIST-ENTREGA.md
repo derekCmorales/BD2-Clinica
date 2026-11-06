@@ -43,7 +43,7 @@ de cierre (`openspec/GOAL-CIERRE.md`) y lo revisa el estudiante.
 - [x] `pnpm e2e:motores` verde ×4 instituciones, desktop y móvil — 14/14; `e2e/reporte/`
 - [x] axe sin violaciones serias/críticas — `revisarAccesibilidad` en ingreso, censo, pestañas y diálogos
 - [x] `pnpm build` verde — API + web
-- [ ] GitHub Actions verde en el último commit — pendiente del push/PR
+- [ ] GitHub Actions verde en el último commit — **decisión del estudiante: dejar pendiente**; el workflow está en `docs/ci/ci.yml` porque el token de push no tiene scope `workflow`
 
 ## E. Empaquetado
 
@@ -51,5 +51,5 @@ de cierre (`openspec/GOAL-CIERRE.md`) y lo revisa el estudiante.
 - [x] Seeds ricos (archivado, menor, dosis vencida, 3 tipos de examen, odontograma con estados) — `postgres/seeds/001_demo.sql`, `mysql/seeds/001_demo.sql`, `mongo/seeds/001_demo.js`, `apps/api/scripts/seed-redis.mjs`
 - [x] README de entrega + guion de demo de 10 min — `README.md`; `docs/entrega-2/11-guion-demo.md`
 - [x] Matriz de cobertura Entrega II con enlaces a evidencia — `docs/entrega-2/10-matriz-cobertura.md`
-- [ ] `openspec list` sin changes activos (todo archivado) y `openspec validate --all` verde — **bloqueado por la redacción de fase 8**
-- [ ] Tag `entrega-2` — **no se crea sin confirmación del estudiante**
+- [ ] `openspec list` sin changes activos (todo archivado) y `openspec validate --all` verde — `validate --all` verde; queda activa `fase-9-entrega-final` por la tarea 3.1 (CI pendiente por decisión del estudiante)
+- [ ] Tag `entrega-2` — **decisión del estudiante: no crear el tag**

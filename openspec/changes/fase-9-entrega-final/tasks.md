@@ -13,6 +13,6 @@
 
 ## 3. Cierre
 
-- [ ] 3.1 Checklist final en CI verde
+- [ ] 3.1 Checklist final en CI verde — decisión del estudiante: dejar CI pendiente; el workflow queda en `docs/ci/ci.yml` porque el token no tiene scope `workflow`
 - [x] 3.2 `openspec archive` de las fases 1–8 completadas
-- [ ] 3.3 Tag `entrega-2`
+- [x] 3.3 Tag `entrega-2` — decisión del estudiante: no crear el tag
