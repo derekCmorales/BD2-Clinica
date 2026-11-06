@@ -57,7 +57,7 @@ export class RegistrarResultadoExamen {
 
   async ejecutar(
     pacienteId: PacienteId,
-    entrada: { readonly tipoExamen: string; readonly fecha: string; readonly valores: Readonly<Record<string, string>> },
+    entrada: { readonly tipoExamen: string; readonly fecha: string; readonly valores: Readonly<Record<string, unknown>> },
     actor: ActorEnCaso,
   ): Promise<ExpedienteVistaDTO> {
     const tipo = exigirTipoExamen(entrada.tipoExamen);

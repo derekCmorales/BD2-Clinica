@@ -4,17 +4,26 @@
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "preparar": "bash scripts/preparar-entorno.sh",
+    "demo": "bash scripts/demo.sh",
     "dev:api": "pnpm --filter @historiales/api start:dev",
     "dev:web": "pnpm --filter @historiales/web dev",
     "build": "pnpm -r run build",
     "docs:mermaid": "node scripts/render-mermaid.mjs",
     "docs:entrega-1": "node scripts/build-entrega-1-doc.mjs",
     "docs:entrega-1:full": "pnpm docs:mermaid && pnpm docs:entrega-1",
+    "docs:entrega-2:mermaid": "node scripts/render-mermaid-entrega-2.mjs",
+    "docs:entrega-2": "node scripts/build-entrega-2-doc.mjs",
+    "docs:entrega-2:full": "pnpm docs:entrega-2:mermaid && pnpm docs:entrega-2",
     "db:migrate": "bash scripts/aplicar-migraciones.sh",
     "db:seed": "bash scripts/aplicar-seeds.sh",
     "verificar:entrega-1": "bash scripts/verificar-entrega-1.sh",
     "verificar:arquitectura": "bash scripts/verificar-arquitectura.sh",
-    "test": "pnpm --filter @historiales/api test"
+    "verificar:privilegios": "bash scripts/verificar-privilegios.sh",
+    "test": "pnpm --filter @historiales/api test",
+    "test:contrato": "bash scripts/test-contrato.sh",
+    "e2e:rapido": "bash scripts/e2e-rapido.sh",
+    "e2e:motores": "bash scripts/e2e-motores.sh",
+    "hospital:reproyectar": "bash scripts/hospital-reproyectar.sh"
   },
   "engines": {
     "node": ">=20"

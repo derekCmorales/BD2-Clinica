@@ -1,10 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import { Pool, type PoolClient } from 'pg';
-import type Redis from 'ioredis';
 import type { PacienteId } from '../../compartido/tipos';
-import { marcarActorId, marcarCitaId, marcarConsultaId } from '../../compartido/tipos';
+import { marcarActorId, marcarCitaId, marcarConsultaId, marcarPacienteId } from '../../compartido/tipos';
 import { aVista } from '../../aplicacion/vista';
 import type { EventoDeDominio } from '../../dominio/eventos/eventos';
 import { Expediente } from '../../dominio/modelo/expediente';
@@ -21,6 +20,7 @@ import type {
 } from '../../dominio/modelo/tipos-clinicos';
 import { CitaSolapada, ConflictoDeConcurrencia } from '../../dominio/errores/errores-dominio';
 import type { AuditLog, EntradaAuditoria } from '../../dominio/puertos/audit-log';
+import type { ConsultaDeAuditoria } from '../../dominio/puertos/consulta-de-auditoria';
 import type { ExpedienteRepository } from '../../dominio/puertos/expediente.repository';
 import type {
   CriterioBusqueda,
@@ -46,13 +46,14 @@ interface Extensiones {
 /**
  * Hospital: INSERT de eventos con UNIQUE(aggregate_id, version).
  * El read model clinico.* se actualiza en la misma transacción (proyector síncrono e idempotente).
- * Después del commit se publica el id del evento en Redis Streams; el payload no sale de Postgres.
+ * Decisión de fase 5: no hay consumidor de Redis Streams; el stream se eliminó para que el
+ * código y el diseño digan lo mismo. La reconstrucción se hace desde clinico.eventos.
  */
 @Injectable()
-export class PostgresExpedienteRepository implements ExpedienteRepository, ExpedienteQueryService, AuditLog {
-  private readonly logger = new Logger(PostgresExpedienteRepository.name);
+export class PostgresExpedienteRepository
+  implements ExpedienteRepository, ExpedienteQueryService, AuditLog, ConsultaDeAuditoria
+{
   private pool?: Pool;
-  private stream?: Redis;
 
   constructor(private readonly config: ConfigService) {}
 
@@ -151,7 +152,6 @@ export class PostgresExpedienteRepository implements ExpedienteRepository, Exped
     } finally {
       client.release();
     }
-    await this.publicar(expediente);
   }
 
   async porPaciente(pacienteId: PacienteId): Promise<ExpedienteVistaDTO | null> {
@@ -212,9 +212,90 @@ export class PostgresExpedienteRepository implements ExpedienteRepository, Exped
     );
   }
 
+  async entradasDe(pacienteId: PacienteId): Promise<readonly EntradaAuditoria[]> {
+    const filas = await this.conexion().query<{
+      actor_id: string;
+      paciente_id: string;
+      accion: EntradaAuditoria['accion'];
+      recurso: string;
+      ocurrido_en: Date;
+    }>(
+      `SELECT actor_id, paciente_id, accion, recurso, ocurrido_en
+       FROM clinico.auditoria_acceso
+       WHERE paciente_id = $1
+       ORDER BY ocurrido_en DESC
+       LIMIT 100`,
+      [pacienteId],
+    );
+    return filas.rows.map((fila) => ({
+      actorId: marcarActorId(fila.actor_id),
+      pacienteId: marcarPacienteId(fila.paciente_id),
+      accion: fila.accion,
+      recurso: fila.recurso,
+      ocurridoEn: fila.ocurrido_en.toISOString(),
+    }));
+  }
+
   async cerrar(): Promise<void> {
     await this.pool?.end();
-    this.stream?.disconnect();
+  }
+
+  /**
+   * Reconstruye el read model desde clinico.eventos. Idempotente: las proyecciones usan
+   * ON CONFLICT DO NOTHING y el script de mantenimiento limpia las tablas derivadas antes.
+   */
+  async reproyectar(): Promise<{ agregados: number; eventos: number }> {
+    const pool = this.conexion();
+    const agregados = await pool.query<{ aggregate_id: string }>(
+      'SELECT DISTINCT aggregate_id FROM clinico.eventos ORDER BY aggregate_id',
+    );
+    let eventos = 0;
+    for (const fila of agregados.rows) {
+      const pacienteId = marcarPacienteId(fila.aggregate_id);
+      const guardados = await pool.query<{
+        version: number;
+        tipo: string;
+        payload: Record<string, unknown>;
+        ocurrido_en: Date;
+        actor_id: string;
+      }>(
+        `SELECT version, tipo, payload, ocurrido_en, actor_id
+         FROM clinico.eventos
+         WHERE aggregate_id = $1
+         ORDER BY version`,
+        [pacienteId],
+      );
+      const historial = guardados.rows.map(
+        (evento) =>
+          ({
+            tipo: evento.tipo,
+            version: evento.version,
+            payload: evento.payload,
+            ocurridoEn: evento.ocurrido_en.toISOString(),
+            actorId: marcarActorId(evento.actor_id),
+          }) as EventoDeDominio,
+      );
+      const expediente = Expediente.desdeEventos(pacienteId, historial);
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const evento of historial) {
+          await this.proyectar(client, expediente, evento);
+          await client.query(
+            `INSERT INTO clinico.proyeccion_aplicada (aggregate_id, version) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+            [pacienteId, evento.version],
+          );
+          eventos += 1;
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+    return { agregados: agregados.rowCount ?? 0, eventos };
   }
 
   private async proyectar(client: PoolClient, expediente: Expediente, evento: EventoDeDominio): Promise<void> {
@@ -270,7 +351,7 @@ export class PostgresExpedienteRepository implements ExpedienteRepository, Exped
       try {
         await client.query(
           `INSERT INTO clinico.cita (id, expediente_id, medico_id, inicio, fin, estado, motivo)
-           VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (id) DO NOTHING`,
           [cita.id, expediente.expedienteId, cita.medicoId, cita.inicio, cita.fin, cita.estado, cita.motivo],
         );
       } catch (error) {
@@ -282,8 +363,8 @@ export class PostgresExpedienteRepository implements ExpedienteRepository, Exped
     }
     await client.query(
       `UPDATE clinico.expediente
-       SET version = $2, estado = $3, motivo_archivo = $4,
-           archivado_en = CASE WHEN $3 = 'archivado' THEN COALESCE(archivado_en, $5::timestamptz) ELSE NULL END,
+       SET version = $2, estado = $3::varchar, motivo_archivo = $4,
+           archivado_en = CASE WHEN $3::text = 'archivado' THEN COALESCE(archivado_en, $5::timestamptz) ELSE NULL END,
            extensiones = $6::jsonb
        WHERE paciente_id = $1`,
       [
@@ -388,42 +469,6 @@ export class PostgresExpedienteRepository implements ExpedienteRepository, Exped
        ON CONFLICT (id) DO NOTHING`,
       [actorId, `${actorId}@historiales.demo`],
     );
-  }
-
-  private async publicar(expediente: Expediente): Promise<void> {
-    try {
-      const redis = await this.bus();
-      for (const evento of expediente.eventosPendientes) {
-        await redis.xadd(
-          'eventos:hospital',
-          '*',
-          'aggregateId',
-          expediente.pacienteId,
-          'version',
-          String(evento.version),
-          'tipo',
-          evento.tipo,
-        );
-      }
-    } catch (error) {
-      this.logger.error(`StreamNoDisponible: ${error instanceof Error ? error.name : 'desconocido'}`);
-    }
-  }
-
-  private async bus(): Promise<Redis> {
-    if (!this.stream) {
-      const { default: IORedis } = await import('ioredis');
-      this.stream = new IORedis({
-        host: this.config.get<string>('REDIS_CACHE_HOST', 'localhost'),
-        port: Number(this.config.get<string>('REDIS_CACHE_PORT', '6391')),
-        username: this.config.get<string>('REDIS_CACHE_USER', 'cache_app'),
-        password: this.config.get<string>('REDIS_CACHE_PASSWORD', 'cache_app_dev'),
-        lazyConnect: true,
-        maxRetriesPerRequest: 1,
-      });
-      await this.stream.connect();
-    }
-    return this.stream;
   }
 
   private conexion(): Pool {

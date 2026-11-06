@@ -578,7 +578,7 @@ kbd {
 .estado-obturado .diente__marca { background: #60a5fa; border-color: #3b82f6; }
 .estado-corona .diente__marca { background: #a78bfa; border-color: #8b5cf6; }
 .estado-ausente .diente__marca { background: transparent; border-style: dashed; }
-.estado-ausente { color: var(--text-disabled); }
+.estado-ausente { color: var(--text-secondary); }
 .estado-implante .diente__marca { background: #71717a; border-color: #52525b; }
 .estado-endodoncia .diente__marca { background: #f87171; border-color: #ef4444; }
 .estado-otro .diente__marca { background: #d4d4d8; }
@@ -591,8 +591,9 @@ kbd {
   border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--surface);
   font-size: var(--text-sm); text-transform: capitalize;
 }
-.chip:hover:not(:disabled) { background: var(--surface-hover); }
+.chip:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--surface-hover); }
 .chip[aria-pressed="true"] { background: var(--primary); color: var(--primary-contrast); border-color: var(--primary); }
+.chip[aria-pressed="true"]:hover { background: var(--primary); }
 .chip .diente__marca { width: 10px; height: 10px; border-radius: 3px; }
 
 /* Gráfica de crecimiento */
@@ -652,4 +653,11 @@ kbd {
 }
 @media (min-width: 861px) {
   .solo-movil { display: none !important; }
+}
+
+/* Antibiograma embebido en el resultado de cultivo */
+.antibiograma { display: grid; gap: 4px; margin: 4px 0 0; padding-left: 16px; }
+.antibiograma__fila { display: grid; grid-template-columns: 1fr 140px auto; gap: var(--space-2); align-items: center; margin-bottom: var(--space-2); }
+@media (max-width: 520px) {
+  .antibiograma__fila { grid-template-columns: 1fr; }
 }

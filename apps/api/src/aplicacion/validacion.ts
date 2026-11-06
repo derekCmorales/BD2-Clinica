@@ -1,13 +1,15 @@
 import { esUuid, type PacienteId } from '../compartido/tipos';
 import { DatosInvalidos } from '../dominio/errores/errores-dominio';
 import {
-  CAMPOS_POR_TIPO_EXAMEN,
+  definicionExamen,
   ESTADOS_PIEZA,
   esCodigoFdi,
+  type AntibiogramaEntrada,
   type DatosPaciente,
   type EstadoPieza,
   type Sexo,
   type TipoExamen,
+  type ValorExamen,
 } from '../dominio/modelo/tipos-clinicos';
 
 const SEXOS: readonly Sexo[] = ['M', 'F', 'X'];
@@ -62,15 +64,59 @@ export function exigirTipoExamen(valor: string): TipoExamen {
   return valor as TipoExamen;
 }
 
-export function exigirValoresExamen(tipo: TipoExamen, valores: Readonly<Record<string, string>>): Record<string, string> {
-  const requeridos = CAMPOS_POR_TIPO_EXAMEN[tipo];
-  const limpio: Record<string, string> = {};
-  for (const campo of requeridos) {
-    const valor = valores[campo];
-    if (!texto(valor)) {
-      throw new DatosInvalidos(campo);
+export function exigirValoresExamen(
+  tipo: TipoExamen,
+  valores: Readonly<Record<string, unknown>>,
+): Record<string, ValorExamen> {
+  const definicion = definicionExamen(tipo);
+  if (!definicion) {
+    throw new DatosInvalidos('tipoExamen');
+  }
+  const limpio: Record<string, ValorExamen> = {};
+  for (const campo of definicion.campos) {
+    const valor = valores[campo.clave];
+
+    if (campo.tipo === 'antibiograma') {
+      if (valor === undefined || valor === null || valor === '') {
+        if (campo.requerido) {
+          throw new DatosInvalidos(campo.clave);
+        }
+        continue;
+      }
+      if (!Array.isArray(valor)) {
+        throw new DatosInvalidos(campo.clave);
+      }
+      const filas = valor.map((fila): AntibiogramaEntrada => {
+        if (typeof fila !== 'object' || fila === null) {
+          throw new DatosInvalidos(campo.clave);
+        }
+        const antibiotico = (fila as { antibiotico?: unknown }).antibiotico;
+        const sensibilidad = (fila as { sensibilidad?: unknown }).sensibilidad;
+        if (!texto(antibiotico) || (sensibilidad !== 'S' && sensibilidad !== 'I' && sensibilidad !== 'R')) {
+          throw new DatosInvalidos(campo.clave);
+        }
+        return { antibiotico: antibiotico.trim(), sensibilidad };
+      });
+      if (filas.length > 0) {
+        limpio[campo.clave] = filas;
+      }
+      continue;
     }
-    limpio[campo] = valor.trim();
+
+    if (!texto(valor)) {
+      if (campo.requerido) {
+        throw new DatosInvalidos(campo.clave);
+      }
+      continue;
+    }
+    const textoValor = valor.trim();
+    if (campo.tipo === 'numero' && !Number.isFinite(Number(textoValor))) {
+      throw new DatosInvalidos(campo.clave);
+    }
+    if (campo.tipo === 'lista' && campo.opciones && !campo.opciones.includes(textoValor)) {
+      throw new DatosInvalidos(campo.clave);
+    }
+    limpio[campo.clave] = textoValor;
   }
   return limpio;
 }
@@ -95,7 +141,7 @@ export function exigirRangoFecha(inicio: string, fin: string): void {
   }
 }
 
-function texto(valor: string | undefined): valor is string {
+function texto(valor: unknown): valor is string {
   return typeof valor === 'string' && valor.trim().length > 0;
 }
 

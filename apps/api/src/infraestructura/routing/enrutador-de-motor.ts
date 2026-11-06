@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import type { InstitucionId, PacienteId } from '../../compartido/tipos';
 import type { Expediente } from '../../dominio/modelo/expediente';
 import type { AuditLog, EntradaAuditoria } from '../../dominio/puertos/audit-log';
+import type { ConsultaDeAuditoria } from '../../dominio/puertos/consulta-de-auditoria';
 import type { ExpedienteRepository } from '../../dominio/puertos/expediente.repository';
 import type {
   CriterioBusqueda,
@@ -21,14 +22,14 @@ import { MysqlExpedienteRepository } from '../mysql/mysql-expediente.repository'
 import { PostgresExpedienteRepository } from '../postgres/postgres-expediente.repository';
 import { RedisExpedienteRepository } from '../redis/redis-expediente.repository';
 
-type Destino = ExpedienteRepository & ExpedienteQueryService & AuditLog;
+type Destino = ExpedienteRepository & ExpedienteQueryService & AuditLog & ConsultaDeAuditoria;
 
 /**
  * Resuelve el adaptador a partir de institucionId del JWT.
  * El caso de uso no ve el motor.
  */
 @Injectable({ scope: Scope.REQUEST })
-export class EnrutadorDeMotor implements ExpedienteRepository, ExpedienteQueryService, AuditLog {
+export class EnrutadorDeMotor implements ExpedienteRepository, ExpedienteQueryService, AuditLog, ConsultaDeAuditoria {
   constructor(
     @Inject(REQUEST) private readonly solicitud: SolicitudAutenticada,
     private readonly config: ConfigService,
@@ -72,6 +73,10 @@ export class EnrutadorDeMotor implements ExpedienteRepository, ExpedienteQuerySe
 
   registrar(entrada: EntradaAuditoria): Promise<void> {
     return this.destino().registrar(entrada);
+  }
+
+  entradasDe(pacienteId: PacienteId): Promise<readonly EntradaAuditoria[]> {
+    return this.destino().entradasDe(pacienteId);
   }
 
   private destino(): Destino {

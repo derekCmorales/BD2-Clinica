@@ -4,6 +4,7 @@ import { Expediente } from '../../dominio/modelo/expediente';
 import { ConflictoDeConcurrencia } from '../../dominio/errores/errores-dominio';
 import type { DatosPaciente } from '../../dominio/modelo/tipos-clinicos';
 import type { AuditLog, EntradaAuditoria } from '../../dominio/puertos/audit-log';
+import type { ConsultaDeAuditoria } from '../../dominio/puertos/consulta-de-auditoria';
 import type { ExpedienteRepository } from '../../dominio/puertos/expediente.repository';
 import type {
   CriterioBusqueda,
@@ -15,7 +16,7 @@ import type {
 import { dosisPendientes } from '../../aplicacion/dosis-pendientes';
 import { aResumen, aVista } from '../../aplicacion/vista';
 
-export type RepositorioCompleto = ExpedienteRepository & ExpedienteQueryService & AuditLog;
+export type RepositorioCompleto = ExpedienteRepository & ExpedienteQueryService & AuditLog & ConsultaDeAuditoria;
 
 /**
  * Misma estrategia observable que los cuatro motores: la escritura entra solo si
@@ -70,6 +71,10 @@ export class MemoriaExpedienteRepository implements RepositorioCompleto {
 
   entradas(): readonly EntradaAuditoria[] {
     return this.auditoria;
+  }
+
+  async entradasDe(pacienteId: PacienteId): Promise<readonly EntradaAuditoria[]> {
+    return this.auditoria.filter((entrada) => entrada.pacienteId === pacienteId).reverse();
   }
 
   sembrar(expediente: Expediente): void {

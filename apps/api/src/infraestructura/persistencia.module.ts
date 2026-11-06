@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { AUDIT_LOG } from '../dominio/puertos/audit-log';
+import { CONSULTA_DE_AUDITORIA } from '../dominio/puertos/consulta-de-auditoria';
 import { EXPEDIENTE_QUERY_SERVICE } from '../dominio/puertos/expediente-query.service';
 import { EXPEDIENTE_REPOSITORY } from '../dominio/puertos/expediente.repository';
 import { GuardiaJwt } from './auth/guardia-jwt';
@@ -41,6 +42,7 @@ import { EnrutadorDeMotor } from './routing/enrutador-de-motor';
     { provide: EXPEDIENTE_REPOSITORY, useExisting: EnrutadorDeMotor },
     { provide: EXPEDIENTE_QUERY_SERVICE, useExisting: EnrutadorDeMotor },
     { provide: AUDIT_LOG, useExisting: EnrutadorDeMotor },
+    { provide: CONSULTA_DE_AUDITORIA, useExisting: EnrutadorDeMotor },
   ],
   exports: [
     JwtModule,
@@ -48,6 +50,7 @@ import { EnrutadorDeMotor } from './routing/enrutador-de-motor';
     EXPEDIENTE_REPOSITORY,
     EXPEDIENTE_QUERY_SERVICE,
     AUDIT_LOG,
+    CONSULTA_DE_AUDITORIA,
   ],
 })
 export class PersistenciaModule {}

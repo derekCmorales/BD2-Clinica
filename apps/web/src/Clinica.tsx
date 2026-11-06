@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ErrorApi, llamar, type ExpedienteVista, type Resumen, type Sesion, type VacunaPendiente } from './api';
+import {
+  ErrorApi,
+  llamar,
+  type DefinicionExamen,
+  type EntradaAuditoria,
+  type ExpedienteVista,
+  type Resumen,
+  type Sesion,
+  type VacunaPendiente,
+} from './api';
 import { institucion } from './App';
 import { edad, esMenor, fechaLegible, fechaRelativa, hoyIso, iniciales } from './formato';
 import { Hoja, type Seccion } from './Hoja';
@@ -27,6 +36,7 @@ const SECCIONES: Array<{ id: Seccion; etiqueta: string; icono: NombreIcono; cuen
   { id: 'crecimiento', etiqueta: 'Crecimiento', icono: 'grafica', cuenta: (e) => e.mediciones.length },
   { id: 'vacunas', etiqueta: 'Vacunas', icono: 'jeringa', cuenta: (e) => e.vacunas.length },
   { id: 'odontograma', etiqueta: 'Odontograma', icono: 'diente' },
+  { id: 'accesos', etiqueta: 'Accesos', icono: 'escudo' },
 ];
 
 type Filtro = 'activo' | 'archivado' | 'todos';
@@ -45,6 +55,10 @@ export function Clinica({ sesion, onSalir }: { sesion: Sesion; onSalir: () => vo
   const [error, setError] = useState('');
   const [ocupado, setOcupado] = useState(false);
   const [cargando, setCargando] = useState(true);
+  const [auditoria, setAuditoria] = useState<EntradaAuditoria[]>([]);
+  const [cargandoAuditoria, setCargandoAuditoria] = useState(false);
+  const [errorAuditoria, setErrorAuditoria] = useState('');
+  const [catalogo, setCatalogo] = useState<DefinicionExamen[]>([]);
 
   const cargarLista = useCallback(
     async (consulta: string) => {
@@ -64,6 +78,7 @@ export function Clinica({ sesion, onSalir }: { sesion: Sesion; onSalir: () => vo
     try {
       const vista = await llamar<ExpedienteVista>(`/pacientes/${pacienteId}`, sesion.token);
       setActual(vista);
+      setAuditoria([]);
       setSeccion(destino);
     } catch (fallo) {
       setError(mensaje(fallo));
@@ -93,6 +108,34 @@ export function Clinica({ sesion, onSalir }: { sesion: Sesion; onSalir: () => vo
     cargarPendientes().catch(() => undefined);
   }, [cargarPendientes]);
 
+  useEffect(() => {
+    llamar<DefinicionExamen[]>('/catalogos/examenes', sesion.token)
+      .then(setCatalogo)
+      .catch(() => setCatalogo([]));
+  }, [sesion.token]);
+
+  useEffect(() => {
+    if (seccion !== 'accesos' || !actual) {
+      return;
+    }
+    let vigente = true;
+    setCargandoAuditoria(true);
+    setErrorAuditoria('');
+    llamar<EntradaAuditoria[]>(`/pacientes/${actual.pacienteId}/auditoria`, sesion.token)
+      .then((entradas) => {
+        if (vigente) setAuditoria(entradas);
+      })
+      .catch((fallo: unknown) => {
+        if (vigente) setErrorAuditoria(mensaje(fallo));
+      })
+      .finally(() => {
+        if (vigente) setCargandoAuditoria(false);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [seccion, actual, sesion.token]);
+
   async function enviar(ruta: string, cuerpo: unknown, exito = 'Quedó registrado en el expediente.'): Promise<boolean> {
     setError('');
     setOcupado(true);
@@ -109,7 +152,9 @@ export function Clinica({ sesion, onSalir }: { sesion: Sesion; onSalir: () => vo
     } catch (fallo) {
       setError(mensaje(fallo));
       if (fallo instanceof ErrorApi && fallo.codigo === 'ConflictoDeConcurrencia' && actual) {
-        void abrir(actual.pacienteId, seccion);
+        // Recarga la versión más reciente y deja el aviso visible para que el médico sepa por qué.
+        const aviso = fallo.message;
+        void abrir(actual.pacienteId, seccion).then(() => setError(aviso));
       }
       return false;
     } finally {
@@ -303,7 +348,14 @@ export function Clinica({ sesion, onSalir }: { sesion: Sesion; onSalir: () => vo
                   className="aparece"
                   key={seccion}
                 >
-                  <Hoja seccion={seccion} expediente={actual} ocupado={ocupado} onEnviar={enviar} />
+                  <Hoja
+                    seccion={seccion}
+                    expediente={actual}
+                    ocupado={ocupado}
+                    onEnviar={enviar}
+                    auditoria={{ entradas: auditoria, cargando: cargandoAuditoria, error: errorAuditoria }}
+                    catalogo={catalogo}
+                  />
                 </div>
               </div>
             </div>

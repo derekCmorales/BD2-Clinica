@@ -39,11 +39,41 @@ export interface ExpedienteVista {
     recetas: Array<{ id: string; textoLibre: string; dosis: string; frecuencia: string }>;
   }>;
   citas: Array<{ id: string; inicio: string; fin: string; motivo: string; estado: string }>;
-  examenes: Array<{ id: string; tipoExamen: string; fecha: string; estado?: string; valores: Record<string, string> }>;
+  examenes: Array<{ id: string; tipoExamen: string; fecha: string; estado?: string; valores: Record<string, ValorExamen> }>;
   mediciones: Array<{ fecha: string; pesoKg: number; tallaCm: number }>;
   vacunas: Array<{ codigo: string; proximaEn: string; aplicadaEn?: string }>;
   piezas: Array<{ codigoFdi: number; estado: string }>;
   procedimientos?: Array<{ id: string; codigoFdi: number; consultaId: string; tipo: string; descripcion: string; realizadoEn: string }>;
+}
+
+export interface AntibiogramaEntrada {
+  antibiotico: string;
+  sensibilidad: 'S' | 'I' | 'R';
+}
+
+export type ValorExamen = string | AntibiogramaEntrada[];
+
+export interface CampoExamen {
+  clave: string;
+  etiqueta: string;
+  unidad?: string;
+  requerido: boolean;
+  tipo: 'texto' | 'numero' | 'lista' | 'antibiograma';
+  opciones?: string[];
+  referencia?: { min?: number; max?: number };
+}
+
+export interface DefinicionExamen {
+  tipo: string;
+  etiqueta: string;
+  campos: CampoExamen[];
+}
+
+export interface EntradaAuditoria {
+  actorId: string;
+  accion: 'lectura' | 'escritura';
+  recurso: string;
+  ocurridoEn: string;
 }
 
 export interface VacunaPendiente {

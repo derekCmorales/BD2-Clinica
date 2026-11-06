@@ -58,11 +58,28 @@ done
 
 if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' 2>/dev/null | grep -qx historiales-mongo; then
   echo "==> MongoDB esquema"
-  docker exec -i historiales-mongo mongosh \
-    -u "${MONGO_INITDB_ROOT_USERNAME:-mongo_root}" \
-    -p "${MONGO_INITDB_ROOT_PASSWORD:-mongo_root_dev}" \
-    --authenticationDatabase admin --quiet \
-    < "$ROOT/apps/api/src/infraestructura/mongo/migrations/001_esquema.js"
+  MONGO_DIR="$ROOT/apps/api/src/infraestructura/mongo/migrations"
+  MONGO_DB="${MONGO_DATABASE:-laboratorio}"
+  # Bases creadas antes de existir la tabla de migraciones: 001 ya estaba aplicada.
+  mongo_root --eval "const b = db.getSiblingDB('$MONGO_DB');
+    if (b.getCollectionInfos({ name: 'examenes' }).length > 0) {
+      b.getCollection('migraciones').updateOne(
+        { version: '001_esquema' },
+        { \$setOnInsert: { aplicadaEn: new Date() } },
+        { upsert: true }
+      );
+    }" >/dev/null
+  for archivo in "$MONGO_DIR"/[0-9][0-9][0-9]_*.js; do
+    version="$(basename "$archivo" .js)"
+    aplicada=$(mongo_root --eval "const b = db.getSiblingDB('$MONGO_DB'); print(b.getCollection('migraciones').findOne({ version: '$version' }) ? 1 : 0)" | tail -1 | tr -d '[:space:]')
+    if [ "$aplicada" = "1" ]; then
+      echo "   = $version"
+      continue
+    fi
+    mongo_root < "$archivo"
+    mongo_root --eval "const b = db.getSiblingDB('$MONGO_DB'); b.getCollection('migraciones').insertOne({ version: '$version', aplicadaEn: new Date() })" >/dev/null
+    echo "   + $version"
+  done
 fi
 
 echo "Migraciones al día."

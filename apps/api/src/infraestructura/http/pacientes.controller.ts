@@ -1,11 +1,12 @@
 import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import type { PacienteId } from '../../compartido/tipos';
 import { ActualizarPieza, RegistrarMedicion, RegistrarResultadoExamen, RegistrarVacuna, ReservarCita } from '../../aplicacion/casos-extension';
 import { CerrarCita, DictaminarExamen, ListarVacunasPendientes, RegistrarProcedimiento } from '../../aplicacion/casos-seguimiento';
 import { AgregarDiagnostico } from '../../aplicacion/agregar-diagnostico';
 import { ArchivarExpediente } from '../../aplicacion/archivar-expediente';
 import { BuscarExpedientes, ObtenerExpediente } from '../../aplicacion/consultas-expediente';
+import { ConsultarAuditoria } from '../../aplicacion/consultar-auditoria';
 import { CrearPacienteNuevo } from '../../aplicacion/crear-paciente-nuevo';
 import { RecetarMedicamento } from '../../aplicacion/recetar-medicamento';
 import { RegistrarConsulta } from '../../aplicacion/registrar-consulta';
@@ -21,6 +22,7 @@ import {
   ProcedimientoDto,
   CrearPacienteDto,
   DiagnosticoDto,
+  EntradaAuditoriaDto,
   ExamenDto,
   MedicionDto,
   PiezaDto,
@@ -37,6 +39,7 @@ export class PacientesController {
     private readonly crear: CrearPacienteNuevo,
     private readonly buscar: BuscarExpedientes,
     private readonly obtener: ObtenerExpediente,
+    private readonly consultarAuditoria: ConsultarAuditoria,
     private readonly registrarConsulta: RegistrarConsulta,
     private readonly agregarDiagnostico: AgregarDiagnostico,
     private readonly recetar: RecetarMedicamento,
@@ -70,6 +73,13 @@ export class PacientesController {
   @Get(':pacienteId')
   ver(@Param('pacienteId') pacienteId: string, @Req() solicitud: SolicitudAutenticada) {
     return this.obtener.ejecutar(this.id(pacienteId), this.actor(solicitud));
+  }
+
+  @Get(':pacienteId/auditoria')
+  @ApiOkResponse({ type: [EntradaAuditoriaDto] })
+  async auditoria(@Param('pacienteId') pacienteId: string): Promise<EntradaAuditoriaDto[]> {
+    const entradas = await this.consultarAuditoria.ejecutar(this.id(pacienteId));
+    return entradas.map(({ actorId, accion, recurso, ocurridoEn }) => ({ actorId, accion, recurso, ocurridoEn }));
   }
 
   @Post(':pacienteId/consultas')

@@ -1,11 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
-import type { PacienteId } from '../../compartido/tipos';
+import { marcarActorId, marcarPacienteId, type PacienteId } from '../../compartido/tipos';
 import { aVista } from '../../aplicacion/vista';
 import { Expediente } from '../../dominio/modelo/expediente';
 import { ConflictoDeConcurrencia } from '../../dominio/errores/errores-dominio';
 import type { AuditLog, EntradaAuditoria } from '../../dominio/puertos/audit-log';
+import type { ConsultaDeAuditoria } from '../../dominio/puertos/consulta-de-auditoria';
 import type { ExpedienteRepository } from '../../dominio/puertos/expediente.repository';
 import type {
   CriterioBusqueda,
@@ -77,7 +78,9 @@ return 'OK'
 `;
 
 @Injectable()
-export class RedisExpedienteRepository implements ExpedienteRepository, ExpedienteQueryService, AuditLog {
+export class RedisExpedienteRepository
+  implements ExpedienteRepository, ExpedienteQueryService, AuditLog, ConsultaDeAuditoria
+{
   private readonly logger = new Logger(RedisExpedienteRepository.name);
   private cliente?: Redis;
 
@@ -212,6 +215,23 @@ export class RedisExpedienteRepository implements ExpedienteRepository, Expedien
     );
   }
 
+  async entradasDe(pacienteId: PacienteId): Promise<readonly EntradaAuditoria[]> {
+    const crudo = await this.conexion().xrevrange(`auditoria:${pacienteId}`, '+', '-', 'COUNT', 100);
+    return crudo.map(([, campos]) => {
+      const mapa = new Map<string, string>();
+      for (let indice = 0; indice < campos.length; indice += 2) {
+        mapa.set(campos[indice], campos[indice + 1]);
+      }
+      return {
+        actorId: marcarActorId(mapa.get('actorId') ?? ''),
+        pacienteId,
+        accion: (mapa.get('accion') as EntradaAuditoria['accion']) ?? 'lectura',
+        recurso: mapa.get('recurso') ?? '',
+        ocurridoEn: mapa.get('ocurridoEn') ?? '',
+      };
+    });
+  }
+
   async cerrar(): Promise<void> {
     this.cliente?.disconnect();
   }
@@ -228,7 +248,10 @@ export class RedisExpedienteRepository implements ExpedienteRepository, Expedien
         username: this.config.get<string>('REDIS_PEDIATRICO_USER', 'pediatrico_app'),
         password: this.config.get<string>('REDIS_PEDIATRICO_PASSWORD', 'pediatrico_app_dev'),
         maxRetriesPerRequest: 1,
-        enableOfflineQueue: false,
+        // El usuario de app no tiene INFO; el ready check fallaría y se saltaría.
+        enableReadyCheck: false,
+        // La primera escritura puede llegar antes de que el socket esté listo; se encola.
+        enableOfflineQueue: true,
       });
       this.cliente.on('error', (error: Error) => {
         this.logger.error(`RedisNoDisponible: ${error.name}`);

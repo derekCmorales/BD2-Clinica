@@ -16,3 +16,7 @@ docs/entrega-1/render/.cache/
 .tmp-docx-png/
 # Secreto local de Mongo (lo genera scripts/preparar-entorno.sh).
 infra/mongo/keyfile
+# Salidas de Playwright (se suben como artefactos de CI, no al repo).
+e2e/reporte/
+e2e/test-results/
+e2e/playwright-report/

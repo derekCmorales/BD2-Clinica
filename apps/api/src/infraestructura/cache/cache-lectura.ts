@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 
@@ -34,7 +34,7 @@ export class CacheEnProceso implements CacheLectura {
 
 /** Caché transversal (instancia volátil, TTL, sin persistencia). No es el registro pediátrico. */
 @Injectable()
-export class CacheRedis implements CacheLectura {
+export class CacheRedis implements CacheLectura, OnModuleDestroy {
   private readonly logger = new Logger(CacheRedis.name);
   private readonly cliente: Redis;
 
@@ -45,7 +45,8 @@ export class CacheRedis implements CacheLectura {
       username: config.get<string>('REDIS_CACHE_USER', 'cache_app'),
       password: config.get<string>('REDIS_CACHE_PASSWORD', 'cache_app_dev'),
       maxRetriesPerRequest: 1,
-      enableOfflineQueue: false,
+      enableReadyCheck: false,
+      enableOfflineQueue: true,
     });
     this.cliente.on('error', (error: Error) => {
       this.logger.error(`CacheNoDisponible: ${error.name}`);
@@ -77,6 +78,10 @@ export class CacheRedis implements CacheLectura {
   }
 
   async cerrar(): Promise<void> {
+    this.cliente.disconnect();
+  }
+
+  onModuleDestroy(): void {
     this.cliente.disconnect();
   }
 }
