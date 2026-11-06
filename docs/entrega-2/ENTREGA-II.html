@@ -143,12 +143,45 @@
 <p>La restricción del enunciado exige un motor distinto por institución y al menos cuatro</p>
 <p>motores. La asignación implementada es:</p>
 <table><thead><tr><th>Institución</th><th>Motor</th><th>Hecho técnico verificable</th></tr></thead><tbody><tr><td>Hospital general</td><td>PostgreSQL</td><td>Event store <code>clinico.eventos</code> con <code>UNIQUE(aggregate_id, version)</code>, read model 3NF, <code>btree_gist</code> para citas sin solape</td></tr><tr><td>Clínica odontológica</td><td>MySQL</td><td>InnoDB <code>utf8mb4</code>, <code>SELECT ... FOR UPDATE</code> para reservar citas, odontograma en <code>pieza_dental</code></td></tr><tr><td>Laboratorio clínico</td><td>MongoDB</td><td>Colección <code>examenes</code> referenciada, <code>$jsonSchema</code> por tipo, índice <code>{ pacienteId: 1, fecha: -1 }</code></td></tr><tr><td>Centro pediátrico</td><td>Redis</td><td>RedisJSON <code>paciente:{id}</code>, ZSET <code>curva:{id}</code> y <code>vacunas:pendientes</code>, Lua para atomicidad</td></tr></tbody></table>
-<h2>Justificación (Redacción del estudiante — 3.1)</h2>
-<p>&gt; <strong>Pendiente.</strong> El estudiante redacta aquí por qué cada institución encaja con su motor</p>
-<p>&gt; a partir del volumen, la estructura de la información y la necesidad de transacciones</p>
-<p>&gt; estrictas. Los hechos técnicos de la tabla anterior son la evidencia disponible.</p>
-<p>Preguntas que la justificación debería responder:</p>
-<ol><li>¿Por qué el Hospital necesita transacciones fuertes y trazabilidad médico-legal?</li><li>¿Por qué la Clínica prioriza operabilidad sobre capacidades avanzadas?</li><li>¿Por qué la estructura variable del Laboratorio hace incómodo un modelo relacional?</li><li>¿Por qué el Pediátrico accede siempre por clave conocida y tolera una ventana de 1 s?</li></ol>
+<h2>Justificación</h2>
+<p><strong>Hospital general → PostgreSQL.</strong> El Hospital es la única institución donde un</p>
+<p>diagnóstico perdido a medias tiene consecuencias médico-legales. PostgreSQL permite</p>
+<p>resolver tres cosas en la misma transacción: insertar el evento en <code>clinico.eventos</code>,</p>
+<p>actualizar el read model y dejar la evidencia en <code>auditoria_acceso</code>. La restricción</p>
+<p><code>UNIQUE(aggregate_id, version)</code> convierte la concurrencia optimista en una garantía del</p>
+<p>motor, no en una convención de la aplicación; <code>btree_gist</code> impide dos citas del mismo</p>
+<p>médico en el mismo intervalo; y <code>JSONB</code> absorbe las extensiones que no son el núcleo</p>
+<p>(mediciones, vacunas, exámenes) sin crear una tabla por cada una. El costo es operativo:</p>
+<p>es el motor que exige más cuidado (roles, migraciones, respaldo, extensiones). Para este</p>
+<p>dominio, ese costo se justifica porque la trazabilidad es el requisito, no un adorno.</p>
+<p><strong>Clínica odontológica → MySQL.</strong> La Clínica no tiene personal técnico propio y su</p>
+<p>prioridad es que las secretarias atiendan rápido. MySQL ofrece hosting gestionado barato,</p>
+<p>herramientas gráficas y un ecosistema amplio; el modelo es un CRUD directo sobre InnoDB</p>
+<p>con <code>utf8mb4</code>. No se necesita Event Sourcing: el odontograma es un estado actual por</p>
+<p>pieza y un historial de procedimientos, no una bitácora médico-legal. `SELECT ... FOR</p>
+<p>UPDATE` sobre la fila del médico y la del expediente es suficiente para que dos</p>
+<p>secretarias no reserven el mismo horario. La simplicidad es deliberada: menos piezas</p>
+<p>móviles para una institución sin soporte técnico.</p>
+<p><strong>Laboratorio clínico → MongoDB.</strong> La estructura del resultado cambia por tipo de</p>
+<p>examen: una hematología tiene cinco campos numéricos, una orina mezcla listas y números,</p>
+<p>y un cultivo agrega un antibiograma. Modelarlo en tablas relacionales llevaría a una</p>
+<p>tabla de atributos por examen (EAV), que es exactamente la anti-solución que el proyecto</p>
+<p>quiere evitar. MongoDB permite validar cada tipo con <code>$jsonSchema</code> y <code>oneOf</code>, y el</p>
+<p>catálogo del dominio alimenta tanto la validación como el formulario. Los exámenes se</p>
+<p>referencian porque un paciente acumula cientos y casi nunca se leen todos juntos; el</p>
+<p>índice <code>{ pacienteId: 1, fecha: -1 }</code> cubre la consulta real.</p>
+<p><strong>Centro pediátrico → Redis.</strong> El Pediátrico atiende consultas frecuentes y cortas, y</p>
+<p>siempre entra por una clave conocida: el paciente. RedisJSON guarda el expediente como</p>
+<p>un documento que se lee completo en una operación; los ZSET resuelven la curva de</p>
+<p>crecimiento (score = fecha) y el esquema de vacunación (score = próxima dosis), incluida</p>
+<p>la consulta global <code>ZRANGEBYSCORE vacunas:pendientes -inf hoy</code>. Redis es sistema de</p>
+<p>registro, no caché: AOF <code>appendfsync everysec</code> + RDB. El trade-off es explícito: se puede</p>
+<p>perder hasta ~1 s de escrituras ante un crash, y no hay consultas ad-hoc nativas. Para</p>
+<p>este volumen y este patrón de acceso, el intercambio es razonable.</p>
+<p><strong>Nota Firebase → Redis.</strong> El enunciado menciona Firebase; el proyecto usa Redis para el</p>
+<p>Pediátrico. La sustitución está pendiente de autorización del catedrático. Si se rechaza,</p>
+<p>Firebase vuelve para el Pediátrico y Redis queda solo como caché: el cambio debe ser de un</p>
+<p>adaptador, no de los casos de uso.</p>
 </section>
 
 <section class="doc-section" id="02-modelado-por-motor">
@@ -253,29 +286,82 @@ privilegios: mínimo por institución verificado</code></pre>
 <p><code>validationLevel: moderate</code> para no invalidar documentos viejos al endurecer el esquema.</p>
 <h2>Redis — Centro pediátrico</h2>
 <table><thead><tr><th>Dato</th><th>Estructura</th><th>Razón técnica</th></tr></thead><tbody><tr><td>Expediente</td><td>RedisJSON <code>paciente:{id}</code></td><td>Acceso siempre por clave conocida; lectura completa en una operación</td></tr><tr><td>Curva de crecimiento</td><td>ZSET <code>curva:{id}</code> con score = fecha</td><td>Orden cronológico y rangos por fecha sin ordenar en la aplicación</td></tr><tr><td>Esquema de vacunación</td><td>ZSET <code>vacunas:{id}</code> con score = próxima dosis</td><td><code>ZRANGEBYSCORE</code> devuelve dosis vencidas</td></tr><tr><td>Dosis pendientes globales</td><td>ZSET <code>vacunas:pendientes</code> con member `pacienteId</td><td>codigo`</td><td>Una sola operación para todas las dosis vencidas</td></tr><tr><td>Índice de búsqueda</td><td>HASH <code>indice:pacientes</code></td><td>Búsqueda por nombre sin consultas ad-hoc nativas</td></tr><tr><td>Auditoría</td><td>STREAM <code>auditoria:{id}</code></td><td>Append-only y lectura por rango</td></tr></tbody></table>
-<h2>Justificación (Redacción del estudiante — 3.2)</h2>
-<p>&gt; <strong>Pendiente.</strong> El estudiante redacta aquí el criterio explícito de embeber vs referenciar</p>
-<p>&gt; y lo conecta con el volumen, la frecuencia de lectura y los límites del motor. Los</p>
-<p>&gt; hechos técnicos de las tablas anteriores son la evidencia disponible.</p>
+<h2>Justificación</h2>
+<p><strong>MongoDB.</strong> El criterio fue el patrón de lectura y el límite del motor. El expediente</p>
+<p>—datos del paciente, consultas, diagnósticos, recetas, citas, mediciones, vacunas y</p>
+<p>piezas— se lee junto cuando el médico abre la hoja, y su tamaño está acotado por la</p>
+<p>atención de una institución; por eso se embebe. Los exámenes son lo contrario: un</p>
+<p>paciente puede acumular cientos a lo largo de años, casi nunca se necesitan todos a la</p>
+<p>vez y el documento crecería hasta chocar con el límite de 16 MB de BSON; por eso se</p>
+<p>referencian en <code>examenes</code> con <code>pacienteId</code> e índice por fecha. El antibiograma es un</p>
+<p>caso intermedio: es pequeño, se lee siempre con el cultivo y no tiene vida propia; se</p>
+<p>embebe como arreglo de <code>{ antibiotico, sensibilidad }</code>. La auditoría queda en una</p>
+<p>colección aparte porque es append-only y no forma parte del agregado clínico.</p>
+<p><strong>Redis.</strong> Aquí el criterio fue la operación que se quiere resolver. El expediente se</p>
+<p>guarda como un solo documento RedisJSON porque el acceso es por clave y la lectura es</p>
+<p>completa; separarlo en varias claves obligaría a varias idas y vueltas. La curva y las</p>
+<p>vacunas sí necesitan orden y rangos, y un JSON no da eso: por eso viven en ZSET con</p>
+<p>score = fecha y score = próxima dosis. <code>vacunas:pendientes</code> es un ZSET global que</p>
+<p>duplica el <code>pacienteId</code> en el member para responder «todas las dosis vencidas» en una</p>
+<p>operación. <code>indice:pacientes</code> es un HASH denormalizado para buscar por nombre; se</p>
+<p>reescribe en el mismo script Lua que guarda el expediente, así que no puede quedar</p>
+<p>desincronizado. El precio de este diseño es que no hay consultas ad-hoc: cualquier</p>
+<p>pregunta que no sea «por paciente» o «por rango de fecha» exige reindexar o RediSearch.</p>
+<p>Ese es el trade-off que se documenta en <code>08-limitaciones.md</code>.</p>
 </section>
 
 <section class="doc-section" id="06-hallazgos">
 <h1>Hallazgos comparativos y conclusiones</h1>
-<p>&gt; <strong>Redacción del estudiante — 3.3.</strong> Esta sección la escribe el estudiante. El agente</p>
-<p>&gt; dejó la tabla vacía y la evidencia que puede sustentar cada hallazgo.</p>
-<table><thead><tr><th>#</th><th>Hallazgo</th><th>Motor(es)</th><th>Evidencia</th></tr></thead><tbody><tr><td>1</td><td></td><td></td><td></td></tr><tr><td>2</td><td></td><td></td><td></td></tr><tr><td>3</td><td></td><td></td><td></td></tr><tr><td>4</td><td></td><td></td><td></td></tr></tbody></table>
-<p>Evidencia disponible para citar:</p>
-<ul><li><code>docs/entrega-2/evidencia-contrato.md</code> — 35 escenarios verdes por motor, incluida la</li></ul>
-<p>  escritura concurrente y la reconstrucción del read model.</p>
-<ul><li><code>docs/entrega-2/capturas/</code> — flujo completo en escritorio y móvil para las cuatro</li></ul>
+<table><thead><tr><th>#</th><th>Hallazgo</th><th>Motor(es)</th><th>Evidencia</th></tr></thead><tbody><tr><td>1</td><td>La consistencia fuerte no es exclusiva de SQL, pero el mecanismo y el costo cambian: eventos + <code>UNIQUE</code>, <code>FOR UPDATE</code>, filtro por <code>version</code> y Lua atómico resuelven el mismo problema con distinta maquinaria</td><td>PostgreSQL, MySQL, MongoDB, Redis</td><td><code>pnpm test:contrato</code>; <code>03-consistencia.md</code></td></tr><tr><td>2</td><td>El modelo documental gana cuando la estructura varía: el catálogo por tipo y <code>$jsonSchema</code> hacen explícita la diferencia entre hematología, orina y cultivo; un EAV relacional sería peor</td><td>MongoDB</td><td><code>GET /catalogos/examenes</code>; migración <code>002_examenes_catalogo.js</code></td></tr><tr><td>3</td><td>Redis es un sistema de registro legítimo para acceso por clave conocida, pero no sustituye un motor analítico: la ausencia de consultas ad-hoc es una limitación real, no un detalle</td><td>Redis</td><td><code>08-limitaciones.md</code>; <code>ZRANGEBYSCORE</code> de vacunas</td></tr><tr><td>4</td><td>La UI puede ser idéntica en los cuatro motores si los puertos hablan el lenguaje del dominio; el motor es una etiqueta, no un tema visual</td><td>Todos</td><td><code>docs/design-system/README.md</code>; capturas <code>capturas/</code></td></tr><tr><td>5</td><td>La seguridad no es solo cifrado: privilegios mínimos, auditoría append-only y no escribir datos restringidos en logs son controles igual de importantes y verificables</td><td>Todos</td><td><code>pnpm verificar:privilegios</code>; <code>registro-seguro.spec.ts</code>; panel «Accesos»</td></tr><tr><td>6</td><td>CQRS no obliga a consistencia eventual: el proyector síncrono en la misma transacción mantiene el read model fuerte y elimina el stream sin consumidor</td><td>PostgreSQL</td><td><code>03-consistencia.md</code>; <code>pnpm hospital:reproyectar</code></td></tr><tr><td>7</td><td>El costo operativo también es un criterio de modelado: MySQL es el más simple de operar, PostgreSQL el más exigente, MongoDB necesita replica set y Redis necesita persistencia configurada</td><td>Todos</td><td><code>docker-compose.yml</code>; <code>01-asignacion-motores.md</code></td></tr></tbody></table>
+<h2>Conclusión</h2>
+<p>La comparación no produce un «motor ganador». Produce un mapa de trade-offs: el Hospital</p>
+<p>paga complejidad operativa por trazabilidad; la Clínica paga menos capacidades por</p>
+<p>operabilidad; el Laboratorio paga una lectura adicional por flexibilidad estructural; el</p>
+<p>Pediátrico paga una ventana de pérdida de 1 s y la falta de consultas ad-hoc por latencia</p>
+<p>y acceso por clave. La arquitectura hexagonal permitió que esa decisión fuera de</p>
+<p>infraestructura: los casos de uso y la UI no cambiaron entre motores.</p>
+<h2>Evidencia disponible para citar</h2>
+<ul><li><a href="evidencia-contrato.md"><code>evidencia-contrato.md</code></a> — 35 escenarios verdes por motor,</li></ul>
+<p>  incluida la escritura concurrente y la reconstrucción del read model.</p>
+<ul><li><a href="capturas/"><code>capturas/</code></a> — flujo completo en escritorio y móvil para las cuatro</li></ul>
 <p>  instituciones.</p>
 <ul><li><code>pnpm verificar:privilegios</code> — privilegios mínimos por motor.</li><li><code>pnpm hospital:reproyectar</code> — reconstrucción desde <code>clinico.eventos</code>.</li></ul>
 </section>
 
 <section class="doc-section" id="07-correcciones-entrega-1">
 <h1>Correcciones a partir de la retroalimentación de Entrega I</h1>
-<p>&gt; <strong>Redacción del estudiante — 3.4.</strong> El estudiante redacta la narrativa de qué se corrigió</p>
-<p>&gt; y por qué. Los cambios técnicos ya implementados son:</p>
+<p>La retroalimentación de la Entrega I apuntó a tres frentes: validación real en los</p>
+<p>motores, privilegios y consistencia. Las correcciones se hicieron en el esquema y en el</p>
+<p>código, no solo en el documento.</p>
+<p><strong>Validación en MongoDB.</strong> El <code>$jsonSchema</code> original usaba <code>const</code>, una palabra que el</p>
+<p>validador de MongoDB no soporta; la migración fallaba y la colección quedaba sin</p>
+<p>validación. Se reemplazó por <code>enum</code> y se agregó la migración <code>002</code>, que alinea el</p>
+<p>esquema con el catálogo del dominio: hematología y orina con sus campos requeridos,</p>
+<p>cultivo con antibiograma embebido. Se usa <code>validationLevel: moderate</code> para no invalidar</p>
+<p>documentos viejos al endurecer el esquema.</p>
+<p><strong>Privilegios en MySQL.</strong> El entrypoint oficial crea el usuario de app con `ALL</p>
+<p>PRIVILEGES<code> sobre la base, así que el </code>GRANT` de la primera migración no restringía nada.</p>
+<p>La migración <code>002_privilegios.sql</code> revoca todo y deja <code>SELECT/INSERT</code> en toda la base,</p>
+<p><code>UPDATE</code> tabla por tabla y ningún <code>DELETE</code>; la auditoría queda fuera de <code>UPDATE</code>. En</p>
+<p>PostgreSQL se hizo lo equivalente: <code>REVOKE UPDATE, DELETE, TRUNCATE</code> sobre</p>
+<p><code>auditoria_acceso</code> y <code>eventos</code>.</p>
+<p><strong>Odontograma.</strong> La restricción <code>codigo_fdi BETWEEN 11 AND 48</code> aceptaba códigos que no</p>
+<p>existen en FDI (19, 20, 29, 30, 39, 40). La migración <code>003_check_fdi.sql</code> valida</p>
+<p>cuadrante 1–4 y posición 1–8, que es la regla real.</p>
+<p><strong>Consistencia en PostgreSQL.</strong> La Entrega I no tenía event store ni una garantía de</p>
+<p>exclusión para citas. La migración <code>003_event_store.sql</code> agrega <code>clinico.eventos</code> con</p>
+<p><code>UNIQUE(aggregate_id, version)</code>, <code>proyeccion_aplicada</code> y la restricción <code>citas_sin_solape</code></p>
+<p>con <code>btree_gist</code>. El read model sigue en 3NF; el expediente se enmienda con eventos.</p>
+<p><strong>Duplicación en el cliente.</strong> La lista de campos por tipo de examen estaba copiada en el</p>
+<p>dominio, en el <code>$jsonSchema</code> y en el cliente. Ahora hay una sola fuente</p>
+<p>(<code>CATALOGO_EXAMENES</code>) servida por <code>GET /catalogos/examenes</code>; el formulario y la tarjeta se</p>
+<p>construyen desde ahí.</p>
+<p><strong>Redis en lugar de Firebase.</strong> La sustitución está pendiente de autorización del</p>
+<p>catedrático. Si se rechaza, Firebase vuelve para el Pediátrico y Redis queda como caché;</p>
+<p>el cambio debe ser de un adaptador.</p>
+<p><strong>Datos de demostración.</strong> Los seeds ahora incluyen un expediente archivado, un paciente</p>
+<p>menor, una dosis vencida, tres tipos de examen y un odontograma con estados. Así la</p>
+<p>defensa no depende de crear datos a mano.</p>
 <table><thead><tr><th>Corrección</th><th>Dónde</th></tr></thead><tbody><tr><td><code>$jsonSchema</code> de Mongo usaba <code>const</code>, palabra no soportada; se reemplazó por <code>enum</code> y se alineó con el catálogo</td><td><code>apps/api/src/infraestructura/mongo/migrations/001_esquema.js</code>, <code>002_examenes_catalogo.js</code></td></tr><tr><td>MySQL otorgaba <code>ALL PRIVILEGES</code> por el entrypoint; se redujo a DML mínimo y auditoría append-only</td><td><code>apps/api/src/infraestructura/mysql/migrations/002_privilegios.sql</code></td></tr><tr><td><code>chk_pieza_fdi</code> aceptaba 19, 20, 29, 30, 39 y 40; ahora valida cuadrante 1–4 y posición 1–8</td><td><code>apps/api/src/infraestructura/mysql/migrations/003_check_fdi.sql</code></td></tr><tr><td>PostgreSQL no tenía event store ni exclusión de citas; se agregaron <code>clinico.eventos</code> y <code>citas_sin_solape</code></td><td><code>apps/api/src/infraestructura/postgres/migrations/003_event_store.sql</code></td></tr><tr><td>Redis sustituyó a Firebase para el centro pediátrico (pendiente de autorización del catedrático)</td><td><code>docker-compose.yml</code>, <code>AGENTS.md</code> §3</td></tr><tr><td>La UI duplicaba los campos de examen; ahora los consume del catálogo</td><td><code>apps/web/src/Hoja.tsx</code>, <code>GET /catalogos/examenes</code></td></tr></tbody></table>
 </section>
 
@@ -306,9 +392,7 @@ pnpm docs:entrega-2:full</code></pre>
 <table><thead><tr><th>Regla</th><th>Evidencia</th></tr></thead><tbody><tr><td><code>dominio/</code> sin infraestructura</td><td><code>pnpm verificar:arquitectura</code></td></tr><tr><td>Sin <code>if</code> por institución/motor en <code>aplicacion/</code></td><td>revisión de <code>apps/api/src/aplicacion/</code>; el enrutamiento vive en <code>infraestructura/routing/</code></td></tr><tr><td>Cada <code>guardar()</code> documenta su estrategia</td><td>comentarios de los cuatro adaptadores + <a href="03-consistencia.md"><code>03-consistencia.md</code></a></td></tr><tr><td>Ningún dato restringido en logs</td><td><code>registro-seguro.spec.ts</code></td></tr><tr><td>Acceso restringido auditado y consultable</td><td><code>GET /pacientes/:id/auditoria</code>, panel «Accesos», <code>e2e</code></td></tr><tr><td>Privilegios mínimos por institución</td><td><code>pnpm verificar:privilegios</code></td></tr><tr><td>Redis AOF <code>everysec</code> + RDB y trade-off de 1 s</td><td><code>docker-compose.yml</code>, <a href="08-limitaciones.md"><code>08-limitaciones.md</code></a></td></tr><tr><td>Datos sintéticos, sin secretos versionados</td><td>seeds de los 4 motores; <code>.env</code> e <code>infra/mongo/keyfile</code> en <code>.gitignore</code></td></tr><tr><td>Nada fuera de alcance</td><td>sin Kafka, gRPC, sagas, Firebase ni Kubernetes</td></tr></tbody></table>
 <h2>Calidad y CI</h2>
 <table><thead><tr><th>Ítem</th><th>Evidencia</th></tr></thead><tbody><tr><td><code>pnpm test</code></td><td>3 suites, 15 tests</td></tr><tr><td><code>pnpm test:contrato</code></td><td>35/35</td></tr><tr><td><code>pnpm e2e:motores</code></td><td>14/14, escritorio y móvil</td></tr><tr><td>axe sin violaciones serias/críticas</td><td><code>revisarAccesibilidad</code> en ingreso, censo, pestañas y diálogos</td></tr><tr><td><code>pnpm build</code></td><td>API + web</td></tr><tr><td>GitHub Actions</td><td><a href="../../.github/workflows/ci.yml"><code>.github/workflows/ci.yml</code></a></td></tr></tbody></table>
-<h2>Pendiente de decisión/redacción del estudiante</h2>
-<ul><li>Fase 8, secciones 3.1–3.4: justificación institución→motor, embeber vs referenciar,</li></ul>
-<p>  hallazgos y correcciones. El andamiaje y la evidencia están listos.</p>
+<h2>Pendiente de confirmación</h2>
 <ul><li>Tag <code>entrega-2</code>: se crea solo con confirmación del estudiante.</li></ul>
 </section>
 

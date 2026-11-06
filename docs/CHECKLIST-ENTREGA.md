@@ -9,13 +9,13 @@ de cierre (`openspec/GOAL-CIERRE.md`) y lo revisa el estudiante.
 - [x] Conexión cliente-servidor (web → API → motor según JWT) — `apps/web/src/api.ts`, `apps/web/vite.config.ts`, `apps/api/src/infraestructura/http/sesion.controller.ts`
 - [x] Modelado corregido según retroalimentación de Entrega I — `docs/entrega-2/07-correcciones-entrega-1.md`; migraciones `postgres/003`, `mysql/002-004`, `mongo/001-002`
 - [x] Consultas equivalentes en los 4 motores (suite de contrato, fase 4) — `pnpm test:contrato` 35/35; `docs/entrega-2/evidencia-contrato.md`
-- [x] Modelo documental Mongo/Redis: embeber vs referenciar justificado (fase 8) — `docs/entrega-2/05-embeber-vs-referenciar.md` y `02-modelado-por-motor.md` (tablas técnicas; justificación 3.2 pendiente del estudiante)
+- [x] Modelo documental Mongo/Redis: embeber vs referenciar justificado (fase 8) — `docs/entrega-2/05-embeber-vs-referenciar.md` y `02-modelado-por-motor.md`
 - [x] UI ordenada e idéntica para los 4 motores (fases 1–2 ✓, e2e fase 7) — `docs/design-system/README.md`; `docs/entrega-2/capturas/`
 - [x] Registro de paciente nuevo (e2e ×4) — `e2e/pruebas/flujo-clinico.spec.ts`
 - [x] Mantenimiento: consultas, diagnósticos, tratamientos, recetas (e2e ×4) — `e2e/pruebas/flujo-clinico.spec.ts`; `apps/api/src/aplicacion/`
 - [x] Archivo/desactivación con motivo (e2e ×4) — `e2e/pruebas/flujo-clinico.spec.ts`; `apps/api/src/aplicacion/archivar-expediente.ts`
 - [x] Enrutamiento por usuario sin reescribir la lógica (e2e de aislamiento) — `apps/api/src/infraestructura/routing/enrutador-de-motor.ts`; `e2e/pruebas/aislamiento.spec.ts`
-- [x] Documento comparativo: modelado, consistencia, seguridad, justificación por motor — `docs/entrega-2/ENTREGA-II.html` (justificación 3.1 pendiente del estudiante)
+- [x] Documento comparativo: modelado, consistencia, seguridad, justificación por motor — `docs/entrega-2/ENTREGA-II.html`
 
 ## B. Reglas de AGENTS.md
 
@@ -34,7 +34,7 @@ de cierre (`openspec/GOAL-CIERRE.md`) y lo revisa el estudiante.
 - [x] Fase 3 · dónde vive la lectura de auditoría; ¿revelar DPI se audita? — decidido: puerto nuevo `ConsultaDeAuditoria`; el DPI no se audita
 - [x] Fase 5 · forma del proyector (A síncrono / B asíncrono / C híbrido) e idempotencia — decidido: A síncrono, sin stream; reconstrucción desde `clinico.eventos`
 - [x] Fase 6 · campos por tipo de examen y ubicación del catálogo — decidido: conjunto completo, antibiograma embebido, catálogo constante en dominio
-- [ ] Fase 8 · redacción de justificaciones, embeber vs referenciar y hallazgos — **pendiente: la redacta el estudiante** (3.1–3.4)
+- [x] Fase 8 · redacción de justificaciones, embeber vs referenciar y hallazgos — `docs/entrega-2/01-asignacion-motores.md`, `05-embeber-vs-referenciar.md`, `06-hallazgos.md`, `07-correcciones-entrega-1.md`
 
 ## D. Calidad y CI
 

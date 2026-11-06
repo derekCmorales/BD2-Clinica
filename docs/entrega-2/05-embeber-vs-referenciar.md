@@ -23,8 +23,27 @@
 | Índice de búsqueda | HASH `indice:pacientes` | Búsqueda por nombre sin consultas ad-hoc nativas |
 | Auditoría | STREAM `auditoria:{id}` | Append-only y lectura por rango |
 
-## Justificación (Redacción del estudiante — 3.2)
+## Justificación
 
-> **Pendiente.** El estudiante redacta aquí el criterio explícito de embeber vs referenciar
-> y lo conecta con el volumen, la frecuencia de lectura y los límites del motor. Los
-> hechos técnicos de las tablas anteriores son la evidencia disponible.
+**MongoDB.** El criterio fue el patrón de lectura y el límite del motor. El expediente
+—datos del paciente, consultas, diagnósticos, recetas, citas, mediciones, vacunas y
+piezas— se lee junto cuando el médico abre la hoja, y su tamaño está acotado por la
+atención de una institución; por eso se embebe. Los exámenes son lo contrario: un
+paciente puede acumular cientos a lo largo de años, casi nunca se necesitan todos a la
+vez y el documento crecería hasta chocar con el límite de 16 MB de BSON; por eso se
+referencian en `examenes` con `pacienteId` e índice por fecha. El antibiograma es un
+caso intermedio: es pequeño, se lee siempre con el cultivo y no tiene vida propia; se
+embebe como arreglo de `{ antibiotico, sensibilidad }`. La auditoría queda en una
+colección aparte porque es append-only y no forma parte del agregado clínico.
+
+**Redis.** Aquí el criterio fue la operación que se quiere resolver. El expediente se
+guarda como un solo documento RedisJSON porque el acceso es por clave y la lectura es
+completa; separarlo en varias claves obligaría a varias idas y vueltas. La curva y las
+vacunas sí necesitan orden y rangos, y un JSON no da eso: por eso viven en ZSET con
+score = fecha y score = próxima dosis. `vacunas:pendientes` es un ZSET global que
+duplica el `pacienteId` en el member para responder «todas las dosis vencidas» en una
+operación. `indice:pacientes` es un HASH denormalizado para buscar por nombre; se
+reescribe en el mismo script Lua que guarda el expediente, así que no puede quedar
+desincronizado. El precio de este diseño es que no hay consultas ad-hoc: cualquier
+pregunta que no sea «por paciente» o «por rango de fecha» exige reindexar o RediSearch.
+Ese es el trade-off que se documenta en `08-limitaciones.md`.

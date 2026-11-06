@@ -24,4 +24,4 @@
 ## 5. Común
 
 - [x] 5.1 Test de reconstrucción en la suite de contrato
-- [ ] 5.2 Sección en el documento comparativo (consistencia fuerte vs eventual)
+- [x] 5.2 Sección en el documento comparativo (consistencia fuerte vs eventual) — `docs/entrega-2/03-consistencia.md`

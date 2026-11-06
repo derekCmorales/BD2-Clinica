@@ -14,5 +14,5 @@
 ## 3. Cierre
 
 - [ ] 3.1 Checklist final en CI verde
-- [ ] 3.2 `openspec archive` de las fases 1–8 completadas
+- [x] 3.2 `openspec archive` de las fases 1–8 completadas
 - [ ] 3.3 Tag `entrega-2`

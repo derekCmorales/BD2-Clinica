@@ -39,8 +39,6 @@
 | `pnpm build` | API + web |
 | GitHub Actions | [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) |
 
-## Pendiente de decisión/redacción del estudiante
+## Pendiente de confirmación
 
-- Fase 8, secciones 3.1–3.4: justificación institución→motor, embeber vs referenciar,
-  hallazgos y correcciones. El andamiaje y la evidencia están listos.
 - Tag `entrega-2`: se crea solo con confirmación del estudiante.
