@@ -153,9 +153,9 @@ export class ExamenDto {
   @IsString()
   fecha!: string;
 
-  @ApiProperty({ type: 'object', additionalProperties: { type: 'string' } })
+  @ApiProperty({ description: 'Valores por campo del catálogo; el antibiograma es un arreglo.' })
   @IsObject()
-  valores!: Record<string, string>;
+  valores!: Record<string, unknown>;
 }
 
 export class MedicionDto {
@@ -242,4 +242,54 @@ export class EntradaAuditoriaDto {
 
   @ApiProperty({ example: '2026-11-05T12:00:00.000Z' })
   ocurridoEn!: string;
+}
+
+export class ReferenciaExamenDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  min?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsNumber()
+  max?: number;
+}
+
+export class CampoExamenDto {
+  @ApiProperty()
+  clave!: string;
+
+  @ApiProperty()
+  etiqueta!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  unidad?: string;
+
+  @ApiProperty()
+  requerido!: boolean;
+
+  @ApiProperty({ enum: ['texto', 'numero', 'lista', 'antibiograma'] })
+  tipo!: 'texto' | 'numero' | 'lista' | 'antibiograma';
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  opciones?: string[];
+
+  @ApiPropertyOptional({ type: ReferenciaExamenDto })
+  @IsOptional()
+  referencia?: ReferenciaExamenDto;
+}
+
+export class DefinicionExamenDto {
+  @ApiProperty({ enum: ['hematologia', 'orina', 'cultivo', 'otro'] })
+  tipo!: 'hematologia' | 'orina' | 'cultivo' | 'otro';
+
+  @ApiProperty()
+  etiqueta!: string;
+
+  @ApiProperty({ type: [CampoExamenDto] })
+  campos!: CampoExamenDto[];
 }

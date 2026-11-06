@@ -65,12 +65,19 @@ export interface Cita {
   readonly estado: EstadoCita;
 }
 
+export interface AntibiogramaEntrada {
+  readonly antibiotico: string;
+  readonly sensibilidad: 'S' | 'I' | 'R';
+}
+
+export type ValorExamen = string | readonly AntibiogramaEntrada[];
+
 export interface ResultadoExamen {
   readonly id: string;
   readonly tipoExamen: TipoExamen;
   readonly fecha: string;
   readonly estado: EstadoResultado;
-  readonly valores: Readonly<Record<string, string>>;
+  readonly valores: Readonly<Record<string, ValorExamen>>;
 }
 
 export interface ProcedimientoDental {
@@ -99,12 +106,78 @@ export interface PiezaDental {
   readonly estado: EstadoPieza;
 }
 
-export const CAMPOS_POR_TIPO_EXAMEN: Readonly<Record<TipoExamen, readonly string[]>> = {
-  hematologia: ['hemoglobina', 'leucocitos'],
-  orina: ['color', 'ph'],
-  cultivo: ['organismo', 'sensibleA'],
-  otro: ['descripcion'],
-};
+export type TipoCampoExamen = 'texto' | 'numero' | 'lista' | 'antibiograma';
+
+export interface ReferenciaExamen {
+  readonly min?: number;
+  readonly max?: number;
+}
+
+export interface CampoExamen {
+  readonly clave: string;
+  readonly etiqueta: string;
+  readonly unidad?: string;
+  readonly requerido: boolean;
+  readonly tipo: TipoCampoExamen;
+  readonly opciones?: readonly string[];
+  readonly referencia?: ReferenciaExamen;
+}
+
+export interface DefinicionExamen {
+  readonly tipo: TipoExamen;
+  readonly etiqueta: string;
+  readonly campos: readonly CampoExamen[];
+}
+
+/**
+ * Fuente única de la estructura de cada examen. El endpoint de catálogo, la validación,
+ * el formulario del cliente y la migración de Mongo se derivan de aquí.
+ */
+export const CATALOGO_EXAMENES: readonly DefinicionExamen[] = [
+  {
+    tipo: 'hematologia',
+    etiqueta: 'Hematología',
+    campos: [
+      { clave: 'hemoglobina', etiqueta: 'Hemoglobina', unidad: 'g/dL', requerido: true, tipo: 'numero', referencia: { min: 12, max: 17.5 } },
+      { clave: 'hematocrito', etiqueta: 'Hematocrito', unidad: '%', requerido: true, tipo: 'numero', referencia: { min: 36, max: 52 } },
+      { clave: 'leucocitos', etiqueta: 'Leucocitos', unidad: '×10³/µL', requerido: true, tipo: 'numero', referencia: { min: 4, max: 11 } },
+      { clave: 'plaquetas', etiqueta: 'Plaquetas', unidad: '×10³/µL', requerido: true, tipo: 'numero', referencia: { min: 150, max: 450 } },
+      { clave: 'eritrocitos', etiqueta: 'Eritrocitos', unidad: '×10⁶/µL', requerido: true, tipo: 'numero', referencia: { min: 4.2, max: 5.9 } },
+    ],
+  },
+  {
+    tipo: 'orina',
+    etiqueta: 'Orina',
+    campos: [
+      { clave: 'color', etiqueta: 'Color', requerido: true, tipo: 'lista', opciones: ['amarillo', 'ámbar', 'rojo', 'incoloro'] },
+      { clave: 'aspecto', etiqueta: 'Aspecto', requerido: true, tipo: 'lista', opciones: ['claro', 'turbio'] },
+      { clave: 'ph', etiqueta: 'pH', requerido: true, tipo: 'numero', referencia: { min: 4.5, max: 8 } },
+      { clave: 'densidad', etiqueta: 'Densidad', requerido: true, tipo: 'numero', referencia: { min: 1.005, max: 1.03 } },
+      { clave: 'proteinas', etiqueta: 'Proteínas', requerido: true, tipo: 'lista', opciones: ['negativo', 'trazas', 'positivo'] },
+      { clave: 'glucosa', etiqueta: 'Glucosa', requerido: true, tipo: 'lista', opciones: ['negativo', 'trazas', 'positivo'] },
+      { clave: 'leucocitos', etiqueta: 'Leucocitos', unidad: '/campo', requerido: true, tipo: 'numero', referencia: { min: 0, max: 5 } },
+    ],
+  },
+  {
+    tipo: 'cultivo',
+    etiqueta: 'Cultivo',
+    campos: [
+      { clave: 'muestra', etiqueta: 'Muestra', requerido: true, tipo: 'texto' },
+      { clave: 'organismo', etiqueta: 'Organismo aislado', requerido: true, tipo: 'texto' },
+      { clave: 'recuentoUfc', etiqueta: 'Recuento UFC', unidad: 'UFC/mL', requerido: true, tipo: 'numero' },
+      { clave: 'antibiograma', etiqueta: 'Antibiograma', requerido: false, tipo: 'antibiograma' },
+    ],
+  },
+  {
+    tipo: 'otro',
+    etiqueta: 'Otro',
+    campos: [{ clave: 'descripcion', etiqueta: 'Descripción', requerido: true, tipo: 'texto' }],
+  },
+];
+
+export function definicionExamen(tipo: TipoExamen): DefinicionExamen | undefined {
+  return CATALOGO_EXAMENES.find((definicion) => definicion.tipo === tipo);
+}
 
 export const ESTADOS_PIEZA: readonly EstadoPieza[] = [
   'sano',

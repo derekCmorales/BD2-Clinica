@@ -1,5 +1,12 @@
 import { type ReactNode, useMemo, useState } from 'react';
-import type { EntradaAuditoria, ExpedienteVista } from './api';
+import type {
+  AntibiogramaEntrada,
+  CampoExamen,
+  DefinicionExamen,
+  EntradaAuditoria,
+  ExpedienteVista,
+  ValorExamen,
+} from './api';
 import { fechaHora, fechaLegible, fechaRelativa, hoyHora, hoyIso, parsearFecha, vencida } from './formato';
 import { Grafica } from './Grafica';
 import {
@@ -40,33 +47,8 @@ interface AccionProps {
   cerrado: boolean;
   ocupado: boolean;
   onEnviar: Enviar;
+  catalogo: readonly DefinicionExamen[];
 }
-
-/** Campos mínimos por tipo de examen: espejo de CAMPOS_POR_TIPO_EXAMEN del dominio. */
-const TIPOS_EXAMEN: Record<string, { etiqueta: string; campos: Array<{ clave: string; etiqueta: string; pista?: string }> }> = {
-  hematologia: {
-    etiqueta: 'Hematología',
-    campos: [
-      { clave: 'hemoglobina', etiqueta: 'Hemoglobina', pista: 'g/dL' },
-      { clave: 'leucocitos', etiqueta: 'Leucocitos', pista: '×10³/µL' },
-    ],
-  },
-  orina: {
-    etiqueta: 'Orina',
-    campos: [
-      { clave: 'color', etiqueta: 'Color' },
-      { clave: 'ph', etiqueta: 'pH' },
-    ],
-  },
-  cultivo: {
-    etiqueta: 'Cultivo',
-    campos: [
-      { clave: 'organismo', etiqueta: 'Organismo aislado' },
-      { clave: 'sensibleA', etiqueta: 'Sensible a' },
-    ],
-  },
-  otro: { etiqueta: 'Otro', campos: [{ clave: 'descripcion', etiqueta: 'Descripción' }] },
-};
 
 const ESTADOS_PIEZA = ['sano', 'caries', 'obturado', 'corona', 'ausente', 'implante', 'endodoncia', 'otro'] as const;
 
@@ -81,12 +63,14 @@ export function Hoja({
   ocupado,
   onEnviar,
   auditoria,
+  catalogo,
 }: {
   seccion: Seccion;
   expediente: ExpedienteVista;
   ocupado: boolean;
   onEnviar: Enviar;
   auditoria: AuditoriaVista;
+  catalogo: readonly DefinicionExamen[];
 }) {
   const props: AccionProps = {
     expediente,
@@ -94,10 +78,11 @@ export function Hoja({
     cerrado: expediente.estado === 'archivado',
     ocupado,
     onEnviar,
+    catalogo,
   };
   switch (seccion) {
     case 'resumen':
-      return <Resumen expediente={expediente} />;
+      return <Resumen expediente={expediente} catalogo={catalogo} />;
     case 'consultas':
       return <Consultas {...props} />;
     case 'agenda':
@@ -173,7 +158,7 @@ function PieDialogo({ onCancelar, ocupado, texto }: { onCancelar: () => void; oc
 
 /* ───────────── Resumen ───────────── */
 
-function Resumen({ expediente }: { expediente: ExpedienteVista }) {
+function Resumen({ expediente, catalogo }: { expediente: ExpedienteVista; catalogo: readonly DefinicionExamen[] }) {
   const proximas = expediente.citas
     .filter((cita) => cita.estado === 'programada')
     .sort((a, b) => parsearFecha(a.inicio).getTime() - parsearFecha(b.inicio).getTime());
@@ -189,13 +174,18 @@ function Resumen({ expediente }: { expediente: ExpedienteVista }) {
       [
         ...expediente.consultas.map((c) => ({ cuando: c.ocurridaEn, titulo: c.motivo, tipo: 'Consulta', icono: 'estetoscopio' as NombreIcono })),
         ...expediente.citas.map((c) => ({ cuando: c.inicio, titulo: c.motivo, tipo: `Cita ${c.estado}`, icono: 'calendario' as NombreIcono })),
-        ...expediente.examenes.map((e) => ({ cuando: e.fecha, titulo: TIPOS_EXAMEN[e.tipoExamen]?.etiqueta ?? e.tipoExamen, tipo: 'Laboratorio', icono: 'matraz' as NombreIcono })),
+        ...expediente.examenes.map((e) => ({
+          cuando: e.fecha,
+          titulo: catalogo.find((definicion) => definicion.tipo === e.tipoExamen)?.etiqueta ?? e.tipoExamen,
+          tipo: 'Laboratorio',
+          icono: 'matraz' as NombreIcono,
+        })),
         ...expediente.mediciones.map((m) => ({ cuando: m.fecha, titulo: `${m.pesoKg} kg · ${m.tallaCm} cm`, tipo: 'Medición', icono: 'regla' as NombreIcono })),
         ...(expediente.procedimientos ?? []).map((p) => ({ cuando: p.realizadoEn, titulo: `${p.tipo} · pieza ${p.codigoFdi}`, tipo: 'Procedimiento', icono: 'diente' as NombreIcono })),
       ]
         .sort((a, b) => parsearFecha(b.cuando).getTime() - parsearFecha(a.cuando).getTime())
         .slice(0, 8),
-    [expediente],
+    [expediente, catalogo],
   );
 
   return (
@@ -695,21 +685,56 @@ function Agenda({ expediente, base, cerrado, ocupado, onEnviar }: AccionProps) {
 
 const TONO_EXAMEN: Record<string, Tono> = { registrado: 'info', validado: 'success', anulado: 'neutral' };
 
-function Laboratorio({ expediente, base, cerrado, ocupado, onEnviar }: AccionProps) {
+function Laboratorio({ expediente, base, cerrado, ocupado, onEnviar, catalogo }: AccionProps) {
   const [abierto, setAbierto] = useState(false);
   const [tipo, setTipo] = useState('hematologia');
   const [fecha, setFecha] = useState(hoyIso());
-  const [valores, setValores] = useState<Record<string, string>>({});
-  const definicion = TIPOS_EXAMEN[tipo];
+  const [valores, setValores] = useState<Record<string, ValorExamen>>({});
+  const definicion = catalogo.find((item) => item.tipo === tipo) ?? catalogo[0];
   const examenes = [...expediente.examenes].sort((a, b) => parsearFecha(b.fecha).getTime() - parsearFecha(a.fecha).getTime());
-  const completo = definicion.campos.every((campo) => valores[campo.clave]?.trim());
+
+  if (!definicion) {
+    return (
+      <div className="seccion">
+        <Alerta tono="warning" titulo="Catálogo no disponible">
+          No se pudo cargar la estructura de los exámenes. Recarga la página.
+        </Alerta>
+      </div>
+    );
+  }
+
+  const completo = definicion.campos.every((campo) => {
+    const valor = valores[campo.clave];
+    if (!campo.requerido) {
+      return true;
+    }
+    if (campo.tipo === 'antibiograma') {
+      return Array.isArray(valor) && valor.length > 0;
+    }
+    return typeof valor === 'string' && valor.trim().length > 0;
+  });
+
+  function cuerpoExamen(): Record<string, unknown> {
+    const cuerpo: Record<string, unknown> = {};
+    for (const campo of definicion.campos) {
+      const valor = valores[campo.clave];
+      if (campo.tipo === 'antibiograma') {
+        if (Array.isArray(valor) && valor.length > 0) {
+          cuerpo[campo.clave] = valor.filter((fila) => fila.antibiotico.trim().length > 0);
+        }
+      } else if (typeof valor === 'string' && valor.trim().length > 0) {
+        cuerpo[campo.clave] = valor.trim();
+      }
+    }
+    return cuerpo;
+  }
 
   return (
     <div className="seccion">
       <SoloLectura cerrado={cerrado} />
       <Barra
         titulo="Resultados de laboratorio"
-        descripcion="Cada tipo de examen tiene su propia estructura."
+        descripcion="Cada tipo de examen tiene su propia estructura; el catálogo es el mismo en las cuatro instituciones."
         clasificacion="restringido"
         accion={
           <BotonAgregar cerrado={cerrado} onClick={() => setAbierto(true)}>
@@ -727,11 +752,12 @@ function Laboratorio({ expediente, base, cerrado, ocupado, onEnviar }: AccionPro
         <div className="grid-cards">
           {examenes.map((examen) => {
             const estado = examen.estado ?? 'registrado';
+            const estructura = catalogo.find((item) => item.tipo === examen.tipoExamen);
             return (
               <article key={examen.id} className="card" style={estado === 'anulado' ? { opacity: 0.65 } : undefined}>
                 <div className="card__header">
                   <div>
-                    <h4>{TIPOS_EXAMEN[examen.tipoExamen]?.etiqueta ?? examen.tipoExamen}</h4>
+                    <h4>{estructura?.etiqueta ?? examen.tipoExamen}</h4>
                     <time className="muted" style={{ fontSize: 'var(--text-sm)' }} dateTime={examen.fecha}>
                       {fechaLegible(examen.fecha)}
                     </time>
@@ -742,12 +768,43 @@ function Laboratorio({ expediente, base, cerrado, ocupado, onEnviar }: AccionPro
                 </div>
                 <div className="card__body">
                   <dl className="kv">
-                    {Object.entries(examen.valores).map(([campo, valor]) => (
-                      <div key={campo}>
-                        <dt>{etiquetaCampo(examen.tipoExamen, campo)}</dt>
-                        <dd>{valor}</dd>
-                      </div>
-                    ))}
+                    {estructura
+                      ? estructura.campos.map((campo) => {
+                          const valor = examen.valores[campo.clave];
+                          if (valor === undefined || valor === '') {
+                            return null;
+                          }
+                          const fuera = evaluarReferencia(campo, valor);
+                          return (
+                            <div key={campo.clave}>
+                              <dt>{etiquetaCampo(campo)}</dt>
+                              <dd>
+                                {Array.isArray(valor) ? (
+                                  <ul className="antibiograma">
+                                    {valor.map((fila, indice) => (
+                                      <li key={`${fila.antibiotico}-${indice}`}>
+                                        {fila.antibiotico} · {SENSIBILIDAD[fila.sensibilidad]}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <span>
+                                    {valor}{' '}
+                                    {fuera ? (
+                                      <Insignia tono={fuera === 'alto' ? 'danger' : 'warning'}>{fuera}</Insignia>
+                                    ) : null}
+                                  </span>
+                                )}
+                              </dd>
+                            </div>
+                          );
+                        })
+                      : Object.entries(examen.valores).map(([campo, valor]) => (
+                          <div key={campo}>
+                            <dt>{campo}</dt>
+                            <dd>{Array.isArray(valor) ? `${valor.length} antibióticos` : valor}</dd>
+                          </div>
+                        ))}
                   </dl>
                 </div>
                 {!cerrado && estado === 'registrado' ? (
@@ -773,8 +830,7 @@ function Laboratorio({ expediente, base, cerrado, ocupado, onEnviar }: AccionPro
         descripcion="Los campos cambian según el tipo de examen."
         onEnviar={async () => {
           if (!completo) return;
-          const cuerpo = Object.fromEntries(definicion.campos.map((c) => [c.clave, valores[c.clave].trim()]));
-          if (await onEnviar(`${base}/examenes`, { tipoExamen: tipo, fecha, valores: cuerpo }, 'Resultado registrado.')) {
+          if (await onEnviar(`${base}/examenes`, { tipoExamen: tipo, fecha, valores: cuerpoExamen() }, 'Resultado registrado.')) {
             setAbierto(false);
             setValores({});
           }
@@ -787,18 +843,18 @@ function Laboratorio({ expediente, base, cerrado, ocupado, onEnviar }: AccionPro
               Tipo de examen
             </span>
             <div className="segmented" role="radiogroup" aria-labelledby="tipo-examen">
-              {Object.entries(TIPOS_EXAMEN).map(([clave, def]) => (
-                <label key={clave}>
+              {catalogo.map((item) => (
+                <label key={item.tipo}>
                   <input
                     type="radio"
                     name="tipo-examen"
-                    checked={tipo === clave}
+                    checked={tipo === item.tipo}
                     onChange={() => {
-                      setTipo(clave);
+                      setTipo(item.tipo);
                       setValores({});
                     }}
                   />
-                  {def.etiqueta}
+                  {item.etiqueta}
                 </label>
               ))}
             </div>
@@ -808,17 +864,13 @@ function Laboratorio({ expediente, base, cerrado, ocupado, onEnviar }: AccionPro
           </Campo>
           <span />
           {definicion.campos.map((campo) => (
-            <Campo key={`${tipo}-${campo.clave}`} etiqueta={campo.etiqueta} pista={campo.pista} className={definicion.campos.length === 1 ? 'span-2' : ''}>
-              {(p) => (
-                <input
-                  {...p}
-                  className="input"
-                  value={valores[campo.clave] ?? ''}
-                  onChange={(e) => setValores((actual) => ({ ...actual, [campo.clave]: e.target.value }))}
-                  required
-                />
-              )}
-            </Campo>
+            <CampoLaboratorio
+              key={`${tipo}-${campo.clave}`}
+              campo={campo}
+              valor={valores[campo.clave]}
+              className={definicion.campos.length === 1 ? 'span-2' : undefined}
+              onChange={(valor) => setValores((actual) => ({ ...actual, [campo.clave]: valor }))}
+            />
           ))}
         </div>
       </Dialogo>
@@ -826,9 +878,141 @@ function Laboratorio({ expediente, base, cerrado, ocupado, onEnviar }: AccionPro
   );
 }
 
-function etiquetaCampo(tipo: string, clave: string): string {
-  const campo = TIPOS_EXAMEN[tipo]?.campos.find((c) => c.clave === clave);
-  return campo ? `${campo.etiqueta}${campo.pista ? ` (${campo.pista})` : ''}` : clave;
+const SENSIBILIDAD: Record<AntibiogramaEntrada['sensibilidad'], string> = {
+  S: 'Sensible',
+  I: 'Intermedio',
+  R: 'Resistente',
+};
+
+function CampoLaboratorio({
+  campo,
+  valor,
+  className,
+  onChange,
+}: {
+  campo: CampoExamen;
+  valor: ValorExamen | undefined;
+  className?: string;
+  onChange: (valor: ValorExamen) => void;
+}) {
+  if (campo.tipo === 'antibiograma') {
+    const filas = Array.isArray(valor) ? valor : [];
+    return (
+      <div className={`field ${className ?? ''}`}>
+        <span className="field__label">
+          {campo.etiqueta} {campo.requerido ? null : <span className="opcional">(opcional)</span>}
+        </span>
+        {filas.map((fila, indice) => (
+          <div key={indice} className="antibiograma__fila">
+            <input
+              className="input"
+              value={fila.antibiotico}
+              onChange={(evento) => {
+                const siguiente = filas.map((item, posicion) =>
+                  posicion === indice ? { ...item, antibiotico: evento.target.value } : item,
+                );
+                onChange(siguiente);
+              }}
+              placeholder="Antibiótico"
+              aria-label={`Antibiótico ${indice + 1}`}
+            />
+            <select
+              className="select"
+              value={fila.sensibilidad}
+              onChange={(evento) => {
+                const siguiente = filas.map((item, posicion) =>
+                  posicion === indice
+                    ? { ...item, sensibilidad: evento.target.value as AntibiogramaEntrada['sensibilidad'] }
+                    : item,
+                );
+                onChange(siguiente);
+              }}
+              aria-label={`Sensibilidad ${indice + 1}`}
+            >
+              <option value="S">Sensible</option>
+              <option value="I">Intermedio</option>
+              <option value="R">Resistente</option>
+            </select>
+            <Boton
+              variante="ghost"
+              soloIcono
+              tamano="sm"
+              icono="cerrar"
+              aria-label={`Quitar antibiótico ${indice + 1}`}
+              onClick={() => onChange(filas.filter((_, posicion) => posicion !== indice))}
+            />
+          </div>
+        ))}
+        <Boton
+          variante="secondary"
+          tamano="sm"
+          icono="mas"
+          onClick={() => onChange([...filas, { antibiotico: '', sensibilidad: 'S' }])}
+        >
+          Agregar antibiótico
+        </Boton>
+      </div>
+    );
+  }
+
+  const texto = typeof valor === 'string' ? valor : '';
+  const pista =
+    [campo.unidad, campo.referencia ? `ref. ${campo.referencia.min ?? '—'}–${campo.referencia.max ?? '—'}` : undefined]
+      .filter(Boolean)
+      .join(' · ') || undefined;
+
+  return (
+    <Campo etiqueta={campo.etiqueta} opcional={!campo.requerido} pista={pista} className={className}>
+      {(props) =>
+        campo.tipo === 'lista' ? (
+          <select
+            {...props}
+            className="select"
+            value={texto}
+            onChange={(evento) => onChange(evento.target.value)}
+            required={campo.requerido}
+          >
+            <option value="">Selecciona…</option>
+            {campo.opciones?.map((opcion) => (
+              <option key={opcion} value={opcion}>
+                {opcion}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            {...props}
+            className="input"
+            value={texto}
+            onChange={(evento) => onChange(evento.target.value)}
+            inputMode={campo.tipo === 'numero' ? 'decimal' : undefined}
+            required={campo.requerido}
+          />
+        )
+      }
+    </Campo>
+  );
+}
+
+function etiquetaCampo(campo: CampoExamen): string {
+  return `${campo.etiqueta}${campo.unidad ? ` (${campo.unidad})` : ''}`;
+}
+
+function evaluarReferencia(campo: CampoExamen, valor: ValorExamen): 'alto' | 'bajo' | null {
+  if (campo.tipo !== 'numero' || typeof valor !== 'string' || !campo.referencia) {
+    return null;
+  }
+  const numero = Number(valor);
+  if (!Number.isFinite(numero)) {
+    return null;
+  }
+  if (campo.referencia.max !== undefined && numero > campo.referencia.max) {
+    return 'alto';
+  }
+  if (campo.referencia.min !== undefined && numero < campo.referencia.min) {
+    return 'bajo';
+  }
+  return null;
 }
 
 /* ───────────── Crecimiento ───────────── */

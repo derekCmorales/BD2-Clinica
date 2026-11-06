@@ -138,7 +138,10 @@ export async function registrarExamen(page: Page): Promise<void> {
   await revisarAccesibilidad(page, 'diálogo Registrar resultado');
   await dialogo.getByRole('radio', { name: 'Hematología' }).check();
   await dialogo.getByLabel('Hemoglobina').fill('13.5');
+  await dialogo.getByLabel('Hematocrito').fill('40');
   await dialogo.getByLabel('Leucocitos').fill('7200');
+  await dialogo.getByLabel('Plaquetas').fill('250');
+  await dialogo.getByLabel('Eritrocitos').fill('4.8');
   await dialogo.getByRole('button', { name: 'Guardar resultado' }).click();
   await expect(page.getByText('Resultado registrado.')).toBeVisible();
 }

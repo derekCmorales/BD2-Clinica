@@ -7,7 +7,7 @@ import { marcarActorId, marcarPacienteId, type PacienteId } from '../../comparti
 import { dosisPendientes } from '../../aplicacion/dosis-pendientes';
 import { aVista } from '../../aplicacion/vista';
 import { Expediente } from '../../dominio/modelo/expediente';
-import type { Cita, DatosPaciente, ResultadoExamen } from '../../dominio/modelo/tipos-clinicos';
+import type { Cita, DatosPaciente, ResultadoExamen, ValorExamen } from '../../dominio/modelo/tipos-clinicos';
 import { CitaSolapada, ConflictoDeConcurrencia } from '../../dominio/errores/errores-dominio';
 import type { AuditLog, EntradaAuditoria } from '../../dominio/puertos/audit-log';
 import type { ConsultaDeAuditoria } from '../../dominio/puertos/consulta-de-auditoria';
@@ -67,7 +67,7 @@ export class MongoExpedienteRepository
         tipoExamen: examen.tipoExamen,
         fecha: String(examen.fecha),
         estado: (examen.estado as ResultadoExamen['estado']) ?? 'registrado',
-        valores: examen.valores as Record<string, string>,
+        valores: examen.valores as Record<string, ValorExamen>,
       })),
       mediciones: documento.mediciones ?? [],
       vacunas: documento.vacunas ?? [],

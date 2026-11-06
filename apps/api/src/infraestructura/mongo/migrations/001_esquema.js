@@ -1,5 +1,6 @@
-// Validación por tipo de examen. Los exámenes van en su propia colección (referenciados):
-// un paciente acumula cientos y embeberlos choca con el límite de 16MB.
+// Validación base. La estructura completa por tipo vive en 002_examenes_catalogo.js.
+// Los exámenes van en su propia colección (referenciados): un paciente acumula cientos
+// y embeberlos choca con el límite de 16MB.
 const nombre = process.env.MONGO_APP_DATABASE || 'laboratorio';
 const base = db.getSiblingDB(nombre);
 
@@ -11,21 +12,16 @@ const validator = {
       pacienteId: { bsonType: 'string' },
       tipoExamen: { enum: ['hematologia', 'orina', 'cultivo', 'otro'] },
       fecha: { bsonType: 'string' },
+      estado: { enum: ['registrado', 'validado', 'anulado'] },
       valores: { bsonType: 'object' },
     },
-    oneOf: [
-      { properties: { tipoExamen: { const: 'hematologia' }, valores: { required: ['hemoglobina', 'leucocitos'] } } },
-      { properties: { tipoExamen: { const: 'orina' }, valores: { required: ['color', 'ph'] } } },
-      { properties: { tipoExamen: { const: 'cultivo' }, valores: { required: ['organismo', 'sensibleA'] } } },
-      { properties: { tipoExamen: { const: 'otro' }, valores: { required: ['descripcion'] } } },
-    ],
   },
 };
 
 if (base.getCollectionInfos({ name: 'examenes' }).length === 0) {
-  base.createCollection('examenes', { validator });
+  base.createCollection('examenes', { validator, validationLevel: 'moderate' });
 } else {
-  base.runCommand({ collMod: 'examenes', validator });
+  base.runCommand({ collMod: 'examenes', validator, validationLevel: 'moderate' });
 }
 
 base.examenes.createIndex({ pacienteId: 1, fecha: -1 });

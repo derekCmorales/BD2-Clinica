@@ -9,6 +9,7 @@ import { CrearPacienteNuevo } from './aplicacion/crear-paciente-nuevo';
 import { RecetarMedicamento } from './aplicacion/recetar-medicamento';
 import { CerrarCita, DictaminarExamen, ListarVacunasPendientes, RegistrarProcedimiento } from './aplicacion/casos-seguimiento';
 import { RegistrarConsulta } from './aplicacion/registrar-consulta';
+import { CatalogosController } from './infraestructura/http/catalogos.controller';
 import { PacientesController } from './infraestructura/http/pacientes.controller';
 import { SesionController } from './infraestructura/http/sesion.controller';
 import { PersistenciaModule } from './infraestructura/persistencia.module';
@@ -19,7 +20,7 @@ import { SaludController } from './salud.controller';
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
     PersistenciaModule,
   ],
-  controllers: [SaludController, SesionController, PacientesController],
+  controllers: [SaludController, SesionController, PacientesController, CatalogosController],
   providers: [
     CrearPacienteNuevo,
     RegistrarConsulta,

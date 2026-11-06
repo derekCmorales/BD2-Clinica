@@ -654,3 +654,10 @@ kbd {
 @media (min-width: 861px) {
   .solo-movil { display: none !important; }
 }
+
+/* Antibiograma embebido en el resultado de cultivo */
+.antibiograma { display: grid; gap: 4px; margin: 4px 0 0; padding-left: 16px; }
+.antibiograma__fila { display: grid; grid-template-columns: 1fr 140px auto; gap: var(--space-2); align-items: center; margin-bottom: var(--space-2); }
+@media (max-width: 520px) {
+  .antibiograma__fila { grid-template-columns: 1fr; }
+}

@@ -1,4 +1,5 @@
 import type { PacienteId } from '../../compartido/tipos';
+import type { ValorExamen } from '../modelo/tipos-clinicos';
 
 export interface ResumenExpedienteDTO {
   readonly pacienteId: string;
@@ -82,7 +83,7 @@ export interface ExpedienteVistaDTO {
     readonly tipoExamen: string;
     readonly fecha: string;
     readonly estado: string;
-    readonly valores: Readonly<Record<string, string>>;
+    readonly valores: Readonly<Record<string, ValorExamen>>;
   }[];
   readonly mediciones: readonly {
     readonly fecha: string;

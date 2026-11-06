@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ErrorApi, llamar, type EntradaAuditoria, type ExpedienteVista, type Resumen, type Sesion, type VacunaPendiente } from './api';
+import {
+  ErrorApi,
+  llamar,
+  type DefinicionExamen,
+  type EntradaAuditoria,
+  type ExpedienteVista,
+  type Resumen,
+  type Sesion,
+  type VacunaPendiente,
+} from './api';
 import { institucion } from './App';
 import { edad, esMenor, fechaLegible, fechaRelativa, hoyIso, iniciales } from './formato';
 import { Hoja, type Seccion } from './Hoja';
@@ -49,6 +58,7 @@ export function Clinica({ sesion, onSalir }: { sesion: Sesion; onSalir: () => vo
   const [auditoria, setAuditoria] = useState<EntradaAuditoria[]>([]);
   const [cargandoAuditoria, setCargandoAuditoria] = useState(false);
   const [errorAuditoria, setErrorAuditoria] = useState('');
+  const [catalogo, setCatalogo] = useState<DefinicionExamen[]>([]);
 
   const cargarLista = useCallback(
     async (consulta: string) => {
@@ -97,6 +107,12 @@ export function Clinica({ sesion, onSalir }: { sesion: Sesion; onSalir: () => vo
   useEffect(() => {
     cargarPendientes().catch(() => undefined);
   }, [cargarPendientes]);
+
+  useEffect(() => {
+    llamar<DefinicionExamen[]>('/catalogos/examenes', sesion.token)
+      .then(setCatalogo)
+      .catch(() => setCatalogo([]));
+  }, [sesion.token]);
 
   useEffect(() => {
     if (seccion !== 'accesos' || !actual) {
@@ -338,6 +354,7 @@ export function Clinica({ sesion, onSalir }: { sesion: Sesion; onSalir: () => vo
                     ocupado={ocupado}
                     onEnviar={enviar}
                     auditoria={{ entradas: auditoria, cargando: cargandoAuditoria, error: errorAuditoria }}
+                    catalogo={catalogo}
                   />
                 </div>
               </div>

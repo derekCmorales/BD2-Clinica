@@ -19,6 +19,13 @@ mysql_root() {
     mysql -uroot "$@"
 }
 
+mongo_root() {
+  "${COMPOSE[@]}" exec -T mongo mongosh \
+    -u "${MONGO_INITDB_ROOT_USERNAME:-mongo_root}" \
+    -p "${MONGO_INITDB_ROOT_PASSWORD:-mongo_root_dev}" \
+    --authenticationDatabase admin --quiet "$@"
+}
+
 redis_pediatrico() {
   "${COMPOSE[@]}" exec -T redis-pediatrico redis-cli --no-auth-warning \
     --user "${REDIS_ADMIN_USER:-redis_admin}" --pass "${REDIS_ADMIN_PASSWORD:-redis_admin_dev}" "$@"
